@@ -1,0 +1,18 @@
+{
+ "pouvoir-achat": "Pouvoir d'achat, prix, salaires, impôts des ménages, aides sociales, TVA",
+ "travail-retraites": "Travail, emploi, chômage, retraites, conditions de travail",
+ "fiscalite-riches": "Fiscalité du capital, des hauts revenus et des grandes entreprises, niches fiscales, fraude fiscale",
+ "sante": "Santé, hôpital, Sécurité sociale (dépenses de santé), médicaments, fin de vie, handicap",
+ "education": "École, université, jeunesse, petite enfance, recherche",
+ "ecologie-energie": "Climat, énergie, biodiversité, pollution, transports, eau",
+ "agriculture-alimentation": "Agriculture, pêche, alimentation, pesticides, élevage",
+ "securite-justice": "Police, justice, prisons, terrorisme, narcotrafic, ordre public",
+ "immigration": "Immigration, asile, nationalité, intégration",
+ "logement-territoires": "Logement, urbanisme, collectivités locales, ruralité",
+ "economie-entreprises": "Entreprises, industrie, commerce, simplification, budget de l'État (hors mesures ciblées), dette",
+ "institutions-libertes": "Institutions, élections, vie privée, numérique, libertés publiques, statut des élus, motions de censure",
+ "egalite-droits": "Égalité femmes-hommes, discriminations, droits LGBT, violences sexuelles et sexistes, laïcité",
+ "international-defense": "Défense, armées, Europe, affaires étrangères, aide au développement",
+ "outre-mer": "Outre-mer (Mayotte, Corse, Nouvelle-Calédonie, etc.)",
+ "culture-sport-medias": "Culture, sport, médias, audiovisuel, patrimoine"
+}
