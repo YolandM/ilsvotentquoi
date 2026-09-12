@@ -133,6 +133,57 @@ def card_html(s, fmt):
         body = f'<div class="card">{kicker}<h1>{esc(q)}</h1>{sub}<div class="hemi">{hemi_svg(s)}</div>{res}<div class="leg">{leg}</div>{tex}{brand}</div>'
     return f'<!doctype html><html lang="fr" class="{fmt}"><head><meta charset="utf-8">{FONTS}<style>{CSS}</style></head><body>{body}</body></html>'
 
+GN = {g["id"]: g["nom"] for g in D["groupes"]}
+def group_pos(g):
+    if g[1] + g[2] + g[3] == 0: return "absent"
+    x = max(g[1], g[2], g[3]); return "pour" if x == g[1] else "contre" if x == g[2] else "abstention"
+
+GCSS = """
+.g h1{margin-top:14px}
+.g .lead{font-size:26px;color:#555;margin-top:16px;line-height:1.35;max-width:34ch}
+.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:22px;margin:auto 0}
+.tile{border-top:3px solid #000;padding-top:14px}
+.tile b{display:block;font-family:"Newsreader",Georgia,serif;font-size:118px;line-height:.95;letter-spacing:-.03em;font-weight:700}
+.tile span{display:block;font-size:24px;font-weight:600;margin-top:10px}
+.tile small{display:block;font-size:19px;color:#828282;margin-top:4px}
+.bar{display:flex;height:34px;border:2px solid #000;margin-top:10px;overflow:hidden}
+.bar i{display:block;height:100%}
+.dot{display:inline-block;width:.75em;height:.75em;border-radius:50%;vertical-align:-.05em;margin-right:.3em}
+.story .g .lead{font-size:32px}
+.story .tiles{gap:40px 28px}
+.story .tile b{font-size:170px}
+.story .tile span{font-size:32px}
+.story .tile small{font-size:24px}
+.story .bar{height:48px}
+.og .tiles{grid-template-columns:repeat(4,1fr);gap:18px;margin:auto 0 0}
+.og .tile b{font-size:72px}
+.og .tile span{font-size:17px}
+.og .tile small{font-size:14px}
+.og .g .lead{font-size:18px;max-width:none}
+.og .bar{height:22px}
+"""
+
+def group_card_html(gid, fmt):
+    ess = [s for s in D["scrutins"] if s["k"] in ("e", "m")]
+    c = {"pour": 0, "contre": 0, "abstention": 0, "absent": 0}; rows = []
+    for s in ess:
+        g = next((x for x in s["g"] if x[0] == gid), None)
+        if g: c[group_pos(g)] += 1; rows.append(g)
+    n = sum(c.values()); col = COL[gid]
+    part = sum(g[1]+g[2]+g[3] for g in rows) / max(1, sum(g[5] for g in rows))
+    pct = lambda k: f"{round(100*c[k]/max(1,n))} %"
+    tex = {"pour": f"background:{col}", "contre": f"background:repeating-linear-gradient(-45deg,{col} 0 4px,#fff 4px 8px)",
+           "abstention": f"background:repeating-linear-gradient(45deg,{col} 0 3px,#fff 3px 8px)", "absent": "background:#fff"}
+    tiles = "".join(f'<div class="tile"><b>{c[k]}</b><span><i class="dot" style="{tex[k]};border:2px solid {col}"></i>{l}</span><small>{pct(k)} des votes décisifs</small></div>'
+                    for k, l in [("pour", "fois pour"), ("contre", "fois contre"), ("abstention", "abstentions"), ("absent", "absent")])
+    bar = '<div class="bar">' + "".join(f'<i style="width:{100*c[k]/max(1,n):.1f}%;{tex[k]}"></i>' for k in ("pour","contre","abstention","absent")) + "</div>"
+    name = GN[gid]; q = f"{name} : ils votent quoi ?"
+    lead = f"Position majoritaire du groupe <b style=\"color:{col}\">{gid}</b> sur les <b>{n} votes décisifs</b> de la législature : lois entières, motions de rejet, motions de censure. Présence moyenne : <b>{round(100*part)} %</b>."
+    kicker = f'<p class="kicker"><b>Assemblée nationale</b> · 17ᵉ législature · votes décisifs</p>'
+    brand = '<div class="brand"><b>Ils votent <em>quoi</em> ?</b><span>ilsvotentquoi.fr · source : Assemblée nationale</span></div>'
+    body = f'<div class="card g" style="--c:{col}">{kicker}<h1><i class="dot" style="background:{col};width:.55em;height:.55em"></i>{esc(q)}</h1><p class="lead">{lead}</p><div class="tiles">{tiles}</div>{bar}{brand}</div>'
+    return f'<!doctype html><html lang="fr" class="{fmt}"><head><meta charset="utf-8">{FONTS}<style>{CSS}{GCSS}</style></head><body>{body}</body></html>'
+
 SIZES = {"og": (1200, 630), "carre": (1080, 1080), "story": (1080, 1920)}
 
 def main():
@@ -140,6 +191,7 @@ def main():
     limit = int(sys.argv[sys.argv.index("--limit") + 1]) if "--limit" in sys.argv else None
     formats = sys.argv[sys.argv.index("--formats") + 1].split(",") if "--formats" in sys.argv else ["og", "carre", "story"]
     todo = [s for s in sorted(D["scrutins"], key=lambda s: -s["n"]) if s["g"]][:limit]
+    if "--groupes" in sys.argv: todo = []
     with sync_playwright() as p:
         b = p.chromium.launch(); pages = {}
         for fmt, (w, h) in SIZES.items():
@@ -153,6 +205,11 @@ def main():
                 name = f"{s['n']}.png" if fmt == "og" else f"{s['n']}-{fmt}.png"
                 page.screenshot(path=os.path.join(OUT, name), type="png")
             if i % 500 == 0: print(f"{i}/{len(todo)}", file=sys.stderr, flush=True)
+        # cartes par groupe (votes décisifs)
+        for gid in ORDER:
+            for fmt, page in pages.items():
+                page.set_content(group_card_html(gid, fmt), wait_until="load"); page.wait_for_timeout(300)
+                page.screenshot(path=os.path.join(OUT, f"groupe-{gid.lower()}{'' if fmt=='og' else '-'+fmt}.png"), type="png")
         # image par défaut du site
         pg = b.new_page(viewport={"width": 1200, "height": 630})
         pg.set_content(f'<!doctype html><html class="og"><head><meta charset="utf-8">{FONTS}<style>{CSS}</style></head><body><div class="card" style="flex-direction:column;justify-content:center;align-items:center;text-align:center"><h1 style="font-size:84px">Ils votent <span style="font-weight:300">quoi</span> ?</h1><p class="sub" style="font-size:26px;margin-top:18px">Les votes réels de chaque groupe et de chaque député, sujet par sujet</p><p class="tex" style="display:block;margin-top:40px">ilsvotentquoi.fr · source : Assemblée nationale</p></div></body></html>')
