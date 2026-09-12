@@ -1,0 +1,5 @@
+data/raw/
+data/site.json
+data/textes_sans_theme.json
+dist/
+__pycache__/
