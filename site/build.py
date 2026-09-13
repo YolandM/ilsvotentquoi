@@ -137,7 +137,7 @@ def layout(title, body, *, desc="", path="/", jsonld=None, og_image=None, curren
     og = og_image or f"{SITE}/static/og-default.png"
     CUR = ' aria-current="page"'
     nav = "".join(f'<a href="{h}"{CUR if current==k else ""}>{l}</a>' for k, h, l in
-                  [("votes", "/", "Les votes"), ("essentiels", "/essentiels/", "L'essentiel"), ("sujets", "/sujets/", "Par sujet"), ("groupes", "/groupes/", "Par groupe"), ("deputes", "/deputes/", "Par député"), ("methode", "/methode/", "Méthode")])
+                  [("votes", "/", "Les votes"), ("essentiels", "/essentiels/", "L'essentiel"), ("sujets", "/sujets/", "Par sujet"), ("groupes", "/groupes/", "Par groupe"), ("deputes", "/deputes/", "Par député"), ("methode", "/methode/", "Méthode"), ("recherche", "/recherche/", "Rechercher")])
     return f'''<!doctype html>
 <html lang="fr">
 <head>
@@ -381,6 +381,35 @@ def build_methode():
 </main></div>'''
     write("/methode/", layout(f"Méthode · {NAME}", body, desc="Comment ilsvotentquoi.fr est fabriqué : sources, classement par sujet, neutralité.", path="/methode/", current="methode"))
 
+def build_recherche():
+    """Index compact pour la recherche côté client + page de recherche."""
+    idx = []
+    for s in sorted(S, key=lambda s: (s["k"] == "a", s["d"], s["n"]), reverse=False if False else True) if False else sorted(S, key=lambda s: (0 if s["k"] in ("e", "m") else 1, -int(s["d"].replace("-", "")), -s["n"])):
+        a = s.get("a") or {}
+        idx.append([s["n"], s["d"], s["s"], s["k"], title_of(s)[:110], "" if s["k"] == "a" else TX[s["tx"]][:90], (a.get("au") or "")[:40], s["th"][0], s["url"].split("/")[2], s["t"][0], s["t"][1]])
+    write("/api/index.json", json.dumps(idx, ensure_ascii=False, separators=(",", ":")))
+    JS = """
+(function(){var q=document.getElementById('q'),out=document.getElementById('out'),cnt=document.getElementById('cnt'),I=null;
+var TH=window.IVQ.themes,K={a:'Amendement',e:'Texte entier',m:'Motion',r:'Article',u:'Vote'};
+function norm(s){return (s||'').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'');}
+function fd(d){var m=['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];return parseInt(d.slice(8))+' '+m[parseInt(d.slice(5,7))-1]+' '+d.slice(0,4);}
+function esc(s){return s.replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function run(){var v=norm(q.value.trim());if(!I){out.innerHTML='<p class="hint">Chargement de l\\'index…</p>';return;}
+ if(v.length<2){out.innerHTML='';cnt.textContent='';return;}
+ var w=v.split(/\\s+/),r=[];
+ for(var i=0;i<I.length&&r.length<300;i++){var s=I[i],h=s[12];var ok=true;for(var j=0;j<w.length;j++){if(h.indexOf(w[j])<0){ok=false;break;}}if(ok)r.push(s);}
+ cnt.textContent=r.length?(r.length>=300?'300 premiers résultats':r.length+' résultat'+(r.length>1?'s':'')):'Aucun résultat';
+ out.innerHTML=r.map(function(s){return '<li><a href="/vote/'+s[8]+'/">'+esc(s[4])+'</a> <span style="color:var(--muted)">· '+K[s[3]]+' · '+fd(s[1])+' · '+TH[s[7]]+' · <b>'+(s[2]?'adopté':'rejeté')+'</b> '+s[9]+'/'+s[10]+(s[6]?' · '+esc(s[6]):'')+'</span></li>';}).join('');}
+fetch('/api/index.json').then(function(r){return r.json();}).then(function(d){I=d;for(var i=0;i<I.length;i++){var s=I[i];s[12]=norm(s[4]+' '+s[5]+' '+s[6]+' '+String(s[0])+' '+s[1]+' '+TH[s[7]]+' '+K[s[3]]);}run();});
+q.addEventListener('input',run);var u=new URLSearchParams(location.search).get('q');if(u){q.value=u;}
+document.getElementById('f').addEventListener('submit',function(e){e.preventDefault();history.replaceState(null,'','?q='+encodeURIComponent(q.value));run();});})();
+"""
+    body = f'''<div class="grid">{sidebar(None, THEME_COUNTS)}<main class="main"><p class="lede"><b>Recherche.</b> Un mot, un nom de député, un numéro de scrutin, un sujet. Tous les {len(S)} votes, en direct.</p>
+<form id="f" role="search"><input class="search" id="q" type="search" placeholder="aide à mourir, Panot, retraites, 8434…" autofocus autocomplete="off" style="max-width:100%;font-size:17px;padding:10px 14px"></form>
+<p class="hint" id="cnt" style="margin-top:8px"></p><ul class="tx-list" id="out"></ul>
+<script>{JS}</script></main></div>'''
+    write("/recherche/", layout(f"Recherche · {NAME}", body, desc="Cherchez un vote de l'Assemblée nationale par mot-clé, député, sujet ou numéro de scrutin.", path="/recherche/", current="recherche", extra_head=f"<script>window.IVQ.themes={json.dumps(THEME_LABEL, ensure_ascii=False)}</script>"))
+
 def build_meta(urls):
     write("/sitemap.xml", '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + "".join(f"<url><loc>{SITE}{u}</loc><lastmod>{BUILD_DATE}</lastmod></url>" for u in urls) + "</urlset>")
     write("/robots.txt", f"User-agent: *\nAllow: /\nSitemap: {SITE}/sitemap.xml\n")
@@ -395,6 +424,7 @@ def build_meta(urls):
 - Par groupe : {SITE}/groupe/<sigle>/, {SITE}/groupe/<sigle>/essentiels/ (votes décisifs) et {SITE}/groupe/<sigle>/<sujet>/ — sigles : {", ".join(g.lower() for g in ORDER)}
 - Par député : {SITE}/depute/<slug>-<id>/
 - Méthode : {SITE}/methode/
+- Recherche : {SITE}/recherche/?q=<mots> (index JSON : {SITE}/api/index.json)
 
 ## Données brutes
 - Députés : {SITE}/api/deputes.json
@@ -405,8 +435,8 @@ def build_meta(urls):
 def main():
     if os.path.exists(DIST): shutil.rmtree(DIST)
     os.makedirs(DIST); shutil.copytree(STATIC, os.path.join(DIST, "static"))
-    build_lists(); build_essentiels(); build_votes(); build_groups(); build_textes(); build_deputes(); build_methode()
-    urls = ["/", "/essentiels/", "/essentiels/motions-de-censure/", "/sujets/", "/groupes/", "/deputes/", "/methode/"] + [f"/sujet/{t}/" for t in THEME_LABEL] + [f"/groupe/{g.lower()}/" for g in ORDER] + [f"/groupe/{g.lower()}/essentiels/" for g in ORDER] + \
+    build_lists(); build_essentiels(); build_votes(); build_groups(); build_textes(); build_deputes(); build_methode(); build_recherche()
+    urls = ["/", "/essentiels/", "/recherche/", "/essentiels/motions-de-censure/", "/sujets/", "/groupes/", "/deputes/", "/methode/"] + [f"/sujet/{t}/" for t in THEME_LABEL] + [f"/groupe/{g.lower()}/" for g in ORDER] + [f"/groupe/{g.lower()}/essentiels/" for g in ORDER] + \
            [f"/groupe/{g.lower()}/{t}/" for g in ORDER for t in THEME_LABEL] + [s["url"] for s in S] + [d["url"] for d in DEPS] + [f"/texte/{i}-{slug(t,50)}/" for i, t in enumerate(TX)]
     build_meta(urls)
     n = sum(len(f) for _, _, f in os.walk(DIST)); sz = sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(DIST) for f in fs)
