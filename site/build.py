@@ -234,9 +234,10 @@ def build_group_essentiels(gid, allv):
 <p class="lede">{lede}</p>
 <div class="stat-row"><div class="stat"><b>{c['pour']}</b><span>votes pour</span></div><div class="stat"><b>{c['contre']}</b><span>votes contre</span></div><div class="stat"><b>{c['abstention']}</b><span>abstentions</span></div><div class="stat"><b>{c['absent']}</b><span>absents en majorité</span></div></div>
 <p class="hint">Même règle fixe que la page <a href="/essentiels/">L'essentiel</a>, sans sélection éditoriale. La pastille indique la position majoritaire du groupe ; le résultat du vote est à droite. Autres groupes : {" · ".join(f'<a href="/groupe/{x.lower()}/essentiels/">{x}</a>' for x in ORDER if x != gid)}.</p>
+<div class="share"><button type="button" data-share>Partager</button><a href="/og/groupe-{gid.lower()}-carre.png" download>Image carrée</a><a href="/og/groupe-{gid.lower()}-story.png" download>Image story</a></div>
 <div class="list">{"".join(rows)}</div></main></div>'''
     path = f"/groupe/{gid.lower()}/essentiels/"
-    write(path, layout(f"{name} : ses votes sur l'essentiel · {NAME}", body, desc=re.sub(r"<[^>]+>", "", lede), path=path, current="essentiels"))
+    write(path, layout(f"{name} : ses votes sur l'essentiel · {NAME}", body, desc=re.sub(r"<[^>]+>", "", lede), path=path, current="essentiels", og_image=f"{SITE}/og/groupe-{gid.lower()}.png"))
 
 def build_lists():
     allv = sorted(S, key=lambda s: (s["d"], s["n"]), reverse=True)

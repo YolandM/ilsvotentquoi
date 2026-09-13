@@ -24,12 +24,36 @@ esc = lambda s: html.escape(str(s), quote=True)
 def fdate(d): y, m, dd = d.split("-"); return f"{int(dd)} {MONTHS[int(m)-1]} {y}"
 def clean_title(t): return re.sub(r"\s*\((première|deuxième|nouvelle|troisième)[^)]*\)\.?$", "", t).rstrip(".")
 def headline(s):
-    """La question, comme les gens la tapent."""
+    """Titre court + accroche. Texte entier : le titre du dossier (court) ; motion : qui l'a déposée."""
+    ok = s["s"] == 1; tx = TX[s["tx"]]; ti = s["ti"]
     if s["k"] == "a" and s.get("a"):
-        a = s["a"]; return f"Qui a voté l'amendement de {a['au']}" + (f" ({a['gr']})" if a["gr"] else "") + " ?", TX[s["tx"]]
-    t = re.sub(r"\s*\([^)]*\)\s*$", "", clean_title(s["ti"])); t = t[0].lower() + t[1:]
-    t = re.sub(r"^l'ensemble (de |du |d')", lambda m: {"de ": "", "du ": "le ", "d'": "l'"}[m.group(1)], t)
-    return ("Qui a voté pour " if s["s"] else "Qui a voté contre ") + t + " ?", None
+        a = s["a"]; return "Qui a voté l'amendement ?", f"Amendement de {a['au']}" + (f" ({a['gr']})" if a["gr"] else ""), tx
+    if s["k"] == "m":
+        who = re.search(r"par (?:MM\.|Mmes|M\.|Mme) ([^,]+?)(?:,| et | du | de la | des |\.$|$)", ti)
+        who = who.group(1).strip() if who else ""
+        if "censure" in ti.lower():
+            return ("Qui a voté la censure ?", "Motion de censure" + (f" déposée par {who}" if who else ""),
+                    f"{'Adoptée' if ok else 'Rejetée'} : {s['t'][0]} voix, il en fallait 289")
+        return "Qui a voté le rejet ?", "Motion de rejet préalable" + (f" de {who}" if who else ""), tx
+    if s["k"] == "a":
+        t = clean_title(ti); return "Qui a voté l'amendement ?", t[0].upper() + t[1:], tx
+    t = tx if len(tx) < 200 else clean_title(ti)
+    t = t[0].upper() + t[1:]
+    return ("Qui a voté pour ?" if ok else "Qui a voté contre ?"), t, None
+
+def positions(s):
+    """Accroche mécanique : la position majoritaire de chaque groupe."""
+    by = {"pour": [], "contre": [], "abstention": [], "absent": []}
+    for g in s["g"]:
+        if g[0] == "NI": continue
+        pos = "absent" if g[1]+g[2]+g[3] == 0 else max((("pour", g[1]), ("contre", g[2]), ("abstention", g[3])), key=lambda x: x[1])[0]
+        by[pos].append(g[0])
+    for k in by: by[k].sort(key=ORDER.index)
+    chips = lambda gs: "".join(f'<span class="chip"><i style="background:{COL[g]}"></i>{g}</span>' for g in gs)
+    out = []
+    for k, l in [("pour", "Pour"), ("contre", "Contre"), ("abstention", "Abstention"), ("absent", "Absent")]:
+        if by[k]: out.append(f'<div class="pos"><span class="pl">{l}</span>{chips(by[k])}</div>')
+    return '<div class="positions">' + "".join(out) + "</div>"
 def group_at(dep, date):
     g = dep["g"][0][1]
     for d, gi in dep["g"]:
@@ -82,6 +106,12 @@ h1{font-family:"Newsreader",Georgia,serif;font-weight:700;letter-spacing:-.015em
 .leg{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:20px;font-weight:600;margin-top:22px}
 .leg i{display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:8px;vertical-align:-1px}
 .tex{font-size:19px;color:#828282;margin-top:12px}
+.q{font-family:"Newsreader",Georgia,serif;font-weight:300;font-size:34px;color:#B91D47;margin-top:22px;letter-spacing:-.01em}
+.positions{display:flex;flex-direction:column;gap:8px;margin-top:18px}
+.pos{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:22px}
+.pl{font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:17px;color:#000;width:150px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1.5px solid #000;border-radius:999px;padding:4px 12px 4px 8px;font-weight:700;font-size:19px}
+.chip i{width:12px;height:12px;border-radius:50%;display:inline-block}
 .brand{display:flex;justify-content:space-between;align-items:baseline;margin-top:26px;border-top:2px solid #000;padding-top:16px}
 .brand b{font-family:"Newsreader",Georgia,serif;font-size:32px;font-weight:700;letter-spacing:-.01em}
 .brand b em{font-style:normal;font-weight:300}
@@ -102,12 +132,27 @@ h1{font-family:"Newsreader",Georgia,serif;font-weight:700;letter-spacing:-.015em
 .og .brand b{font-size:24px}
 .og .brand span{font-size:15px}
 .og .tex{display:none}
-.carre h1{font-size:58px}
-.carre .hemi{margin:34px 0 auto}
+.og .q{font-size:24px;margin-top:10px}
+.og h1{font-size:38px;margin-top:6px}
+.og .positions{gap:5px;margin-top:12px}
+.og .pl{font-size:13px;width:105px}
+.og .chip{font-size:14px;padding:2px 9px 2px 6px}
+.og .chip i{width:9px;height:9px}
+.og .pos{font-size:15px}
+.carre h1{font-size:50px;margin-top:6px}
+.carre h1.long{font-size:42px}
+.carre .hemi{margin:auto 0}
 .story .card{padding:90px 72px}
-.story h1{font-size:74px}
+.story h1{font-size:66px;margin-top:8px}
+.story h1.long{font-size:54px}
+.story .q{font-size:46px;margin-top:40px}
+.story .positions{gap:12px;margin-top:34px}
+.story .pos{font-size:30px}
+.story .pl{font-size:22px;width:200px}
+.story .chip{font-size:26px;padding:6px 16px 6px 10px}
+.story .chip i{width:16px;height:16px}
 .story .sub{font-size:30px}
-.story .hemi{margin:60px 0 auto}
+.story .hemi{margin:auto 0}
 .story .pill{font-size:30px;padding:16px 34px}
 .story .tally{font-size:38px}
 .story .leg{font-size:26px;gap:12px 26px;margin-top:34px}
@@ -119,18 +164,20 @@ h1{font-family:"Newsreader",Georgia,serif;font-weight:700;letter-spacing:-.015em
 FONTS = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:wght@300;700&family=Public+Sans:wght@400;600;700&display=swap">'
 
 def card_html(s, fmt):
-    q, tx = headline(s); ok = s["s"] == 1
+    q, t1, tx = headline(s); ok = s["s"] == 1
     present = {g[0] for g in s["g"]}
     leg = "".join(f'<span><i style="background:{COL[g]}"></i>{g}</span>' for g in ORDER if g in present)
     res = f'<div class="res"><span class="pill {"" if ok else "no"}">{"Adopté" if ok else "Rejeté"}</span><span class="tally"><b>{s["t"][0]}</b> pour<span>·</span><b>{s["t"][1]}</b> contre<span>·</span><b>{s["t"][2]}</b> abst.</span></div>'
     tex = '<p class="tex">● pour &nbsp; ⊗ contre &nbsp; ▨ abstention &nbsp; ○ absent &nbsp;·&nbsp; couleur = groupe</p>'
     brand = f'<div class="brand"><b>Ils votent <em>quoi</em> ?</b><span>ilsvotentquoi.fr · source : Assemblée nationale</span></div>'
     kicker = f'<p class="kicker"><b>Assemblée nationale</b> · {fdate(s["d"])} · scrutin nº {s["n"]}</p>'
+    h1 = f'<h1 class="{"long" if len(t1) > 90 else ""}">{esc(t1)}</h1>'
     sub = f'<p class="sub">{esc(tx)}</p>' if tx else ""
+    qq = f'<p class="q">{esc(q)}</p>'
     if fmt == "og":
-        body = f'<div class="card"><div class="left">{kicker}<h1>{esc(q)}</h1>{sub}{res}<div class="leg">{leg}</div>{brand}</div><div class="right"><div class="hemi">{hemi_svg(s)}</div></div></div>'
+        body = f'<div class="card"><div class="left">{kicker}{qq}{h1}{sub}{positions(s)}{res}{brand}</div><div class="right"><div class="hemi">{hemi_svg(s)}</div></div></div>'
     else:
-        body = f'<div class="card">{kicker}<h1>{esc(q)}</h1>{sub}<div class="hemi">{hemi_svg(s)}</div>{res}<div class="leg">{leg}</div>{tex}{brand}</div>'
+        body = f'<div class="card">{kicker}{qq}{h1}{sub}<div class="hemi">{hemi_svg(s)}</div>{res}{positions(s)}{tex}{brand}</div>'
     return f'<!doctype html><html lang="fr" class="{fmt}"><head><meta charset="utf-8">{FONTS}<style>{CSS}</style></head><body>{body}</body></html>'
 
 GN = {g["id"]: g["nom"] for g in D["groupes"]}
