@@ -407,23 +407,46 @@ def build_deputes():
         st = deputy_stats(i, d); LBL = st["LBL"]; cnt = st["cnt"]; rate = st["rate"]; ess = st["ess"]; ecarts = st["ecarts"]
         gid = ORDER[d["g"][-1][1]]
         n_ess = sum(ess.values()); n_part = cnt["P"] + cnt["C"] + cnt["A"]
-        table = "".join(f'<tr><td><a href="{s["url"]}">{esc(title_of(s))}</a></td><td>{fdate(s["d"])}</td><td class="v">{LBL[v]}</td><td>{"adopté" if s["s"] else "rejeté"}</td></tr>' for s, v in st["my"])
+        POS = {"P": ("pour", "background:%s;color:#fff"), "C": ("contre", "background:repeating-linear-gradient(-45deg,%s 0 2px,#fff 2px 4px);color:#000;text-shadow:0 0 4px #fff,0 0 4px #fff"), "A": ("abstention", "background:repeating-linear-gradient(45deg,%s 0 2px,#fff 2px 5px);color:#000;text-shadow:0 0 4px #fff,0 0 4px #fff"), "N": ("non-votant", "background:#fff;box-shadow:inset 0 0 0 1px %s;color:#000")}
+        col = COL[gid]
+        def vote_card(s, v):
+            lab, st = POS[v]; ok = s["s"] == 1
+            return (f'<article class="vc" data-v="{v}"><div class="cat"><span><b>{THEME_LABEL[s["th"][0]]}</b> · {KIND.get(s["k"], "Vote")} · <time datetime="{s["d"]}">{fdate(s["d"])}</time></span><span>nº {s["n"]}</span></div>'
+                    f'<h3><a href="{s["url"]}">{esc(title_of(s))}</a></h3>'
+                    f'<div class="result"><span class="pill" style="{st.replace("%s", col)}">{lab}</span><span class="pill {"ok" if ok else "no"}">{"Adopté" if ok else "Rejeté"}</span><span class="tally">{s["t"][0]} pour · {s["t"][1]} contre · {s["t"][2]} abst.</span></div></article>')
+        cards = "".join(vote_card(s, v) for s, v in st["my"])
+        nv = len(st["my"]); npos = {k: sum(1 for _, v in st["my"] if v == k) for k in "PCAN"}
         ec_rows = "".join(f'<li><a href="{s["url"]}">{esc(title_of(s))}</a> <span style="color:var(--muted)">· {fdate(s["d"])} · a voté <b>{LBL[v]}</b>, son groupe {gp}</span></li>' for s, v, gp in ecarts[:40])
+        pe = (f"{100*len(ecarts)/max(1,n_part):.1f}".replace(".", ",") if 100*len(ecarts)/max(1,n_part) < 1 else str(round(100*len(ecarts)/max(1,n_part))))
         MORE40 = "Les 40 plus significatifs (textes entiers et motions d'abord)."
-        ECARTS = (f'<h2 class="sec">Ses écarts avec son groupe</h2><p class="hint">Les {len(ecarts)} scrutins où {esc(d["nom"])} a voté autrement que la majorité de son groupe ({(f"{100*len(ecarts)/max(1,n_part):.1f}".replace(".", ",") if 100*len(ecarts)/max(1,n_part) < 1 else str(round(100*len(ecarts)/max(1,n_part)))) } % de ses votes). Fait brut, sans interprétation : un écart peut être un désaccord comme une consigne de vote. {MORE40 if len(ecarts) > 40 else ""}</p><ul class="tx-list">{ec_rows}</ul>') if ecarts else ""
-        share = f'<div class="share"><button type="button" data-share>Partager</button><a href="/og/depute-{d["id"]}-carre.png" download>Image carrée</a></div>'
+        ECARTS = (f'<details class="fold"><summary><b>Ses écarts avec son groupe</b> <span class="muted">· {len(ecarts)} scrutins ({pe} % de ses votes)</span></summary><p class="hint">Les scrutins où {esc(d["nom"])} a voté autrement que la majorité de son groupe. Fait brut, sans interprétation : un écart peut être un désaccord comme une consigne de vote. {MORE40 if len(ecarts) > 40 else ""}</p><ul class="tx-list">{ec_rows}</ul></details>') if ecarts else ""
+        bar = lambda pct, med: f'<div class="gauge"><i style="width:{pct}%;background:{col}"></i><b style="left:{med}%" title="médiane des députés : {med} %"></b></div>'
+        essbar = '<div class="bar" style="border-color:#000">' + "".join(f'<i style="width:{100*ess[k]/max(1,n_ess):.1f}%;{POS[c][1].split(";")[0].replace("%s", col)}"></i>' for k, c in (("pour","P"),("contre","C"),("abstention","A"),("absent","N"))) + "</div>"
+        mandat = f"{fdate(d['f'])} → {'en cours' if d['l'] >= LAST_VOTE else fdate(d['l'])}"
+        share = f'<div class="share"><button type="button" data-share>Partager</button><a href="/og/depute-{d["id"]}-carre.png" download>Image carrée</a><a href="/groupe/{gid.lower()}/">Son groupe</a></div>'
+        FILTERS = "".join(f'<button type="button" class="chipbtn" data-f="{k}">{l} <small>{nv if k == "*" else npos[k]}</small></button>' for k, l in (("*", "Tous"), ("P", "Pour"), ("C", "Contre"), ("A", "Abstention")))
+        JS = "(function(){var L=[].slice.call(document.querySelectorAll('.vc')),N=20,f='*',shown=N,more=document.getElementById('more'),btns=document.querySelectorAll('.chipbtn');function draw(){var k=0;L.forEach(function(c){var ok=(f=='*'||c.dataset.v==f);c.hidden=!(ok&&k<shown);if(ok)k++;});more.hidden=k<=shown;more.textContent='Voir plus ('+(k-shown)+' autres)';}btns.forEach(function(b){b.addEventListener('click',function(){f=b.dataset.f;shown=N;btns.forEach(function(x){x.classList.toggle('on',x===b);});draw();});});more.addEventListener('click',function(){shown+=N;draw();});btns[0].classList.add('on');draw();})();"
         body = f'''<div class="grid">{sidebar(None, THEME_COUNTS)}<main class="main"><p class="crumbs"><a href="/deputes/">Députés</a> › {esc(d['nom'])}</p>
-<div class="dep-head">{photo_tag(d, 96)}<p class="lede" style="margin:0"><b>{esc(d['nom'])}</b>{(", "+esc(d['dept'])+(" ("+d['circo']+"ᵉ circonscription)" if d['circo'] else "")) if d['dept'] else ""}. Groupe <a href="/groupe/{gid.lower()}/"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:{COL[gid]};vertical-align:middle"></span> {esc(GN[gid])}</a>.</p></div>
-<div class="stat-row"><div class="stat"><b>{rate} %</b><span>de présence, tous scrutins<br><small>médiane des députés : {MED} %</small></span></div><div class="stat"><b>{st['ess_rate']} %</b><span>de présence, votes décisifs<br><small>médiane : {MED_ESS} %</small></span></div><div class="stat"><b>{cnt['P']}</b><span>votes pour</span></div><div class="stat"><b>{cnt['C']}</b><span>votes contre</span></div></div>
-<p class="hint">Présence = a pris part au vote (pour, contre ou abstention). « Tous scrutins » : les {st['eligible']} scrutins publics tenus pendant son mandat, y compris les milliers de votes sur amendements en séance de nuit, d'où des taux bas pour tout le monde. « Votes décisifs » : lois entières et motions. La médiane est donnée comme repère, pas comme norme.</p>
-{share}
-<h2 class="sec">Sur l'essentiel</h2>
-<p class="hint">Les {n_ess} <a href="/essentiels/">votes décisifs</a> tenus pendant son mandat (lois entières, motions de rejet, motions de censure).</p>
-<div class="stat-row"><div class="stat"><b>{ess['pour']}</b><span>pour</span></div><div class="stat"><b>{ess['contre']}</b><span>contre</span></div><div class="stat"><b>{ess['abstention']}</b><span>abstentions</span></div><div class="stat"><b>{ess['absent']}</b><span>absent ou non-votant</span></div></div>
+<header class="dep-head">{photo_tag(d, 120)}<div><h1 class="dep-name">{esc(d['nom'])}</h1>
+<p class="dep-meta">{(esc(d['dept'])+(" · "+d['circo']+"ᵉ circonscription" if d['circo'] else "")+" · ") if d['dept'] else ""}<a class="gchip" href="/groupe/{gid.lower()}/" style="--c:{col}">{gid} · {esc(GN[gid])}</a></p>
+<p class="dep-meta muted">Mandat : {mandat} · {st['eligible']} scrutins publics pendant son mandat</p>{share}</div></header>
+<section class="kpis">
+<div class="kpi"><b>{rate} %</b><span>présence, tous scrutins</span>{bar(rate, MED)}<small>médiane des députés : {MED} %</small></div>
+<div class="kpi"><b>{st['ess_rate']} %</b><span>présence, votes décisifs</span>{bar(st['ess_rate'], MED_ESS)}<small>médiane : {MED_ESS} %</small></div>
+<div class="kpi"><b>{len(ecarts)}</b><span>écarts avec son groupe</span><small>{pe} % de ses {n_part} votes</small></div>
+<div class="kpi"><b>{cnt['P']} <em>/</em> {cnt['C']} <em>/</em> {cnt['A']}</b><span>pour / contre / abstention</span><small>tous scrutins confondus</small></div>
+</section>
+<p class="hint">Présence = a pris part au vote. « Tous scrutins » compte aussi les milliers de votes d'amendements en séance de nuit, d'où des taux bas pour tout le monde ; « votes décisifs » = lois entières et motions. La médiane est un repère, pas une norme. <a href="/methode/">Méthode</a>.</p>
+<h2 class="sec">Sur l'essentiel <span class="muted">· {n_ess} votes décisifs pendant son mandat</span></h2>
+{essbar}
+<div class="legend-row"><span><i style="background:{col}"></i> pour {ess['pour']}</span><span><i style="{POS['C'][1].split(';')[0].replace('%s', col)}"></i> contre {ess['contre']}</span><span><i style="{POS['A'][1].split(';')[0].replace('%s', col)}"></i> abstention {ess['abstention']}</span><span><i style="background:#fff;box-shadow:inset 0 0 0 1px {col}"></i> absent {ess['absent']}</span></div>
 {ECARTS}
-<h2 class="sec">Ses votes sur les textes entiers, articles et motions</h2>
-<p class="hint">Les votes sur amendements sont consultables scrutin par scrutin.</p>
-<table class="deps"><thead><tr><th>Vote</th><th>Date</th><th>Position</th><th>Résultat</th></tr></thead><tbody>{table}</tbody></table></main></div>'''
+<h2 class="sec">Ses votes <span class="muted">· {nv} textes entiers, articles et motions</span></h2>
+<div class="chips">{FILTERS}</div>
+<div class="list vlist">{cards}</div>
+<button type="button" id="more" class="more" hidden>Voir plus</button>
+<p class="hint">Les votes sur amendements sont consultables scrutin par scrutin, et dans la <a href="/recherche/">recherche</a>.</p>
+<script>{JS}</script></main></div>'''
         jsonld = {"@context": "https://schema.org", "@type": "Person", "name": d["nom"], "jobTitle": "Député·e", **({"image": f"{SITE}/photos/{d['id']}.jpg"} if has_photo(d) else {}), "memberOf": {"@type": "Organization", "name": GN[gid]}, "url": SITE + d["url"]}
         desc = f"Les votes de {d['nom']} ({gid}) à l'Assemblée nationale : présence {rate} % (médiane {MED} %), {st['ess_rate']} % sur les votes décisifs, {cnt['P']} pour, {cnt['C']} contre, {cnt['A']} abstentions. Sur les votes décisifs : {ess['pour']} pour, {ess['contre']} contre. {len(ecarts)} écarts avec son groupe."
         write(d["url"], layout(f"{d['nom']} : ses votes à l'Assemblée · {NAME}", body, desc=desc, path=d["url"], jsonld=jsonld, current="deputes", og_image=f"{SITE}/og/depute-{d['id']}.png"))

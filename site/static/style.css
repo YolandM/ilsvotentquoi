@@ -192,3 +192,42 @@ h2.sec{font-family:var(--serif);font-size:22px;font-weight:700;margin:26px 0 8px
 .dep-head{display:flex;gap:18px;align-items:flex-start;margin-bottom:12px}
 .dep-row{display:flex;gap:10px;align-items:center}
 .dep-row .photo{width:32px;height:41px}
+
+/* page député v2 */
+.dep-head{display:flex;gap:22px;align-items:flex-start;margin:6px 0 18px}
+.dep-head .photo{width:120px;height:154px;border:2px solid #000}
+.dep-name{font-family:var(--serif);font-size:clamp(28px,3.6vw,40px);font-weight:700;letter-spacing:-.015em;line-height:1.05;margin:0 0 8px}
+.dep-meta{font-family:var(--sans);font-size:15px;margin:0 0 4px}
+.muted{color:var(--muted);font-weight:400}
+.gchip{display:inline-block;border:1.5px solid var(--c);border-left:10px solid var(--c);padding:2px 10px;border-radius:999px;text-decoration:none;font-weight:600;font-size:14px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:18px;margin:22px 0 10px}
+.kpi{border-top:2px solid #000;padding-top:10px}
+.kpi b{display:block;font-family:var(--serif);font-size:38px;line-height:1;letter-spacing:-.02em}
+.kpi b em{font-style:normal;color:var(--muted);font-weight:300}
+.kpi span{display:block;font-family:var(--sans);font-size:13px;font-weight:600;margin-top:6px}
+.kpi small{display:block;font-family:var(--sans);font-size:12px;color:var(--muted);margin-top:4px}
+.gauge{position:relative;height:8px;background:var(--panel);margin-top:8px}
+.gauge i{display:block;height:100%}
+.gauge b{position:absolute;top:-4px;width:2px;height:16px;background:#000}
+.bar{display:flex;height:22px;border:1.5px solid #000;overflow:hidden}
+.bar i{display:block;height:100%}
+.legend-row{display:flex;flex-wrap:wrap;gap:8px 18px;font-family:var(--sans);font-size:13px;margin:8px 0 18px}
+.legend-row i{display:inline-block;width:12px;height:12px;vertical-align:-2px;margin-right:5px}
+.fold{border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:12px 0;margin:8px 0 18px}
+.fold summary{cursor:pointer;font-family:var(--serif);font-size:20px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 14px}
+.chipbtn{font:inherit;font-family:var(--sans);font-size:13px;font-weight:600;border:1.5px solid #000;background:#fff;border-radius:999px;padding:5px 12px;cursor:pointer}
+.chipbtn small{color:var(--muted);font-weight:400;margin-left:4px}
+.chipbtn.on{background:#000;color:#fff}
+.chipbtn.on small{color:#ccc}
+.vc{padding:12px 0;border-bottom:1px solid var(--rule)}
+.vc h3{font-family:var(--serif);font-size:19px;font-weight:400;line-height:1.25;margin:4px 0 8px}
+.vc .result{gap:10px}
+.vc .pill{font-size:11px;padding:4px 10px}
+.more{display:block;margin:16px auto;font:inherit;font-family:var(--sans);font-size:14px;font-weight:600;border:1.5px solid #000;background:#fff;padding:8px 18px;cursor:pointer}
+@media (max-width:600px){.dep-head{flex-direction:column}.dep-head .photo{width:90px;height:115px}}
+.vc .cat{display:flex;justify-content:space-between;gap:12px;font-family:var(--sans);font-size:12px;color:var(--muted)}
+.vc .cat b{color:var(--red)}
+.vc h3 a{text-decoration:none}
+.vc h3 a:hover{text-decoration:underline}
+.vc .pill{letter-spacing:.08em}
