@@ -397,7 +397,7 @@ def build_deputes():
         ECARTS = (f'<h2 class="sec">Ses écarts avec son groupe</h2><p class="hint">Les {len(ecarts)} scrutins où {esc(d["nom"])} a voté autrement que la majorité de son groupe ({(f"{100*len(ecarts)/max(1,n_part):.1f}".replace(".", ",") if 100*len(ecarts)/max(1,n_part) < 1 else str(round(100*len(ecarts)/max(1,n_part)))) } % de ses votes). Fait brut, sans interprétation : un écart peut être un désaccord comme une consigne de vote. {MORE40 if len(ecarts) > 40 else ""}</p><ul class="tx-list">{ec_rows}</ul>') if ecarts else ""
         share = f'<div class="share"><button type="button" data-share>Partager</button><a href="/og/depute-{d["id"]}-carre.png" download>Image carrée</a></div>'
         body = f'''<div class="grid">{sidebar(None, THEME_COUNTS)}<main class="main"><p class="crumbs"><a href="/deputes/">Députés</a> › {esc(d['nom'])}</p>
-<p class="lede"><b>{esc(d['nom'])}</b>{(", "+esc(d['dept'])+(" ("+d['circo']+"ᵉ circonscription)" if d['circo'] else "")) if d['dept'] else ""}. Groupe <a href="/groupe/{gid.lower()}/"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:{COL[gid]};vertical-align:middle"></span> {esc(GN[gid])}</a>.</p>
+<div class="dep-head">{photo_tag(d, 96)}<p class="lede" style="margin:0"><b>{esc(d['nom'])}</b>{(", "+esc(d['dept'])+(" ("+d['circo']+"ᵉ circonscription)" if d['circo'] else "")) if d['dept'] else ""}. Groupe <a href="/groupe/{gid.lower()}/"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:{COL[gid]};vertical-align:middle"></span> {esc(GN[gid])}</a>.</p></div>
 <div class="stat-row"><div class="stat"><b>{rate} %</b><span>de présence aux scrutins publics</span></div><div class="stat"><b>{cnt['P']}</b><span>votes pour</span></div><div class="stat"><b>{cnt['C']}</b><span>votes contre</span></div><div class="stat"><b>{cnt['A']}</b><span>abstentions</span></div></div>
 <p class="hint">Présence = a pris part au vote (pour, contre ou abstention) sur les {st['eligible']} scrutins tenus pendant son mandat.</p>
 {share}
@@ -408,10 +408,10 @@ def build_deputes():
 <h2 class="sec">Ses votes sur les textes entiers, articles et motions</h2>
 <p class="hint">Les votes sur amendements sont consultables scrutin par scrutin.</p>
 <table class="deps"><thead><tr><th>Vote</th><th>Date</th><th>Position</th><th>Résultat</th></tr></thead><tbody>{table}</tbody></table></main></div>'''
-        jsonld = {"@context": "https://schema.org", "@type": "Person", "name": d["nom"], "jobTitle": "Député·e", "memberOf": {"@type": "Organization", "name": GN[gid]}, "url": SITE + d["url"]}
+        jsonld = {"@context": "https://schema.org", "@type": "Person", "name": d["nom"], "jobTitle": "Député·e", **({"image": f"{SITE}/photos/{d['id']}.jpg"} if has_photo(d) else {}), "memberOf": {"@type": "Organization", "name": GN[gid]}, "url": SITE + d["url"]}
         desc = f"Les votes de {d['nom']} ({gid}) à l'Assemblée nationale : présence {rate} %, {cnt['P']} pour, {cnt['C']} contre, {cnt['A']} abstentions. Sur les votes décisifs : {ess['pour']} pour, {ess['contre']} contre. {len(ecarts)} écarts avec son groupe."
         write(d["url"], layout(f"{d['nom']} : ses votes à l'Assemblée · {NAME}", body, desc=desc, path=d["url"], jsonld=jsonld, current="deputes", og_image=f"{SITE}/og/depute-{d['id']}.png"))
-        rows_index.append((d["famille"] or d["nom"], f'<li><a href="{d["url"]}">{esc(d["nom"])}</a> <span style="color:var(--muted)">· {gid}{(" · "+esc(d["dept"])) if d["dept"] else ""} · présence {rate} %</span></li>'))
+        rows_index.append((d["famille"] or d["nom"], f'<li class="dep-row">{photo_tag(d, 32)}<span><a href="{d["url"]}">{esc(d["nom"])}</a> <span style="color:var(--muted)">· {gid}{(" · "+esc(d["dept"])) if d["dept"] else ""} · présence {rate} %</span></span></li>'))
     rows_index.sort(key=lambda x: norm(x[0]))
     ONINPUT = "const q=this.value.toLowerCase();document.querySelectorAll('.tx-list li').forEach(l=>l.hidden=!l.textContent.toLowerCase().includes(q))"
     body = f'<div class="grid">{sidebar(None, THEME_COUNTS)}<main class="main"><p class="lede"><b>Par député.</b> {len(DEPS)} députés ayant siégé pendant la législature.</p><input class="search" type="search" placeholder="Nom, département, groupe" oninput="{esc(ONINPUT)}"><ul class="tx-list">{"".join(r for _, r in rows_index)}</ul></main></div>'
@@ -420,7 +420,7 @@ def build_deputes():
 
 def build_methode():
     body = f'''<div class="grid">{sidebar(None, THEME_COUNTS)}<main class="main"><p class="lede"><b>Méthode.</b> Comment ce site est fabriqué, et ce qu'il ne fait pas.</p>
-<div class="qa"><h2>D'où viennent les chiffres</h2><p>De l'open data de l'Assemblée nationale : scrutins, amendements, dossiers législatifs et liste des députés de la 17ᵉ législature. Le site est régénéré chaque nuit. Chaque page de vote renvoie au scrutin officiel. Les groupes sont affichés dans l'ordre de l'hémicycle, de gauche à droite, avec les couleurs que l'Assemblée publie elle-même. « Absent » = membres du groupe moins votants et non-votants déclarés.</p></div>
+<div class="qa"><h2>D'où viennent les chiffres</h2><p>De l'open data de l'Assemblée nationale : scrutins, amendements, dossiers législatifs et liste des députés de la 17ᵉ législature. Le site est régénéré chaque nuit. Chaque page de vote renvoie au scrutin officiel. Les groupes sont affichés dans l'ordre de l'hémicycle, de gauche à droite, avec les couleurs que l'Assemblée publie elle-même. « Absent » = membres du groupe moins votants et non-votants déclarés. Les photos des députés sont les portraits officiels publiés par l'Assemblée nationale.</p></div>
 <div class="qa"><h2>« L'essentiel »</h2><p>Cette page n'est pas un choix éditorial. Elle applique une règle fixe : tous les votes sur l'ensemble d'un texte (le moment où une loi est adoptée ou rejetée), toutes les motions de rejet préalable et toutes les motions de censure. Rien d'autre, rien de moins. Les amendements, même très commentés, restent dans « Tous les votes » et dans les pages par sujet.</p></div>
 <div class="qa"><h2>Comment les votes sont rangés par sujet</h2><p>Chaque vote est rattaché à son texte de loi ; chaque texte est classé dans un à trois sujets (liste publique, corrigeable). Pour les budgets, qui touchent à tout, chaque amendement est classé d'après son contenu par mots-clés. Le classement est automatique ; les erreurs peuvent être signalées et sont corrigées dans le fichier public de classement.</p></div>
 <div class="qa"><h2>« L'auteur explique »</h2><p>Pour un amendement, la phrase affichée est l'exposé sommaire écrit par le député qui l'a déposé. C'est son argument, pas une description neutre : il est cité comme tel, avec son nom et son groupe.</p></div>
@@ -480,9 +480,33 @@ def build_meta(urls):
 - Source officielle d'un scrutin : https://www.assemblee-nationale.fr/dyn/17/scrutins/<numéro>
 """)
 
+PHOTOS = os.path.join(ROOT, "data", "raw", "photos")
+PHOTO_URL = "https://www2.assemblee-nationale.fr/static/tribun/17/photos/{}.jpg"
+def fetch_photos():
+    """Photos officielles des députés (© Assemblée nationale). Manquante = silhouette."""
+    import urllib.request, concurrent.futures
+    os.makedirs(PHOTOS, exist_ok=True)
+    def one(d):
+        dst = os.path.join(PHOTOS, d["id"] + ".jpg")
+        if os.path.exists(dst) and os.path.getsize(dst) > 1000: return True
+        try:
+            req = urllib.request.Request(PHOTO_URL.format(d["id"].replace("PA", "")), headers={"User-Agent": "ilsvotentquoi.fr (bot photos)"})
+            with urllib.request.urlopen(req, timeout=20) as r, open(dst, "wb") as f: f.write(r.read())
+            return os.path.getsize(dst) > 1000
+        except Exception: return False
+    if os.environ.get("IVQ_NO_PHOTOS"): return
+    with concurrent.futures.ThreadPoolExecutor(8) as ex: ok = sum(ex.map(one, DEPS))
+    print(f"photos : {ok}/{len(DEPS)}", file=sys.stderr)
+def has_photo(d): return os.path.exists(os.path.join(PHOTOS, d["id"] + ".jpg"))
+def photo_tag(d, size=64):
+    if has_photo(d): return f'<img class="photo" src="/photos/{d["id"]}.jpg" alt="" width="{size}" height="{round(size*1.28)}" loading="lazy">'
+    return f'<span class="photo silhouette" style="width:{size}px;height:{round(size*1.28)}px"></span>'
+
 def main():
     if os.path.exists(DIST): shutil.rmtree(DIST)
     os.makedirs(DIST); shutil.copytree(STATIC, os.path.join(DIST, "static"))
+    fetch_photos()
+    if os.path.isdir(PHOTOS): shutil.copytree(PHOTOS, os.path.join(DIST, "photos"))
     build_lists(); build_essentiels(); build_votes(); build_groups(); build_textes(); build_deputes(); build_methode(); build_recherche()
     urls = ["/", "/essentiels/", "/recherche/", "/essentiels/motions-de-censure/", "/sujets/", "/groupes/", "/deputes/", "/methode/"] + [f"/sujet/{t}/" for t in THEME_LABEL] + [f"/groupe/{g.lower()}/" for g in ORDER] + [f"/groupe/{g.lower()}/essentiels/" for g in ORDER] + \
            [f"/groupe/{g.lower()}/{t}/" for g in ORDER for t in THEME_LABEL] + [s["url"] for s in S] + [d["url"] for d in DEPS] + [f"/texte/{i}-{slug(t,50)}/" for i, t in enumerate(TX)]

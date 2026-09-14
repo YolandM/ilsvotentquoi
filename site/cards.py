@@ -200,12 +200,22 @@ GCSS = """
 .bar{display:flex;height:34px;border:2px solid #000;margin-top:10px;overflow:hidden}
 .bar i{display:block;height:100%}
 .dot{display:inline-block;width:.75em;height:.75em;border-radius:50%;vertical-align:-.05em;margin-right:.3em}
+.head{display:flex;gap:28px;align-items:flex-start;margin-top:14px}
+.head h1{margin-top:0}
+.pic{width:150px;height:192px;object-fit:cover;border:3px solid #000;flex:none}
+.og .head{gap:20px}
+.og .pic{width:100px;height:128px}
+.story .pic{width:210px;height:269px}
 .story .g .lead{font-size:32px}
 .story .tiles{gap:40px 28px}
 .story .tile b{font-size:170px}
 .story .tile span{font-size:32px}
 .story .tile small{font-size:24px}
 .story .bar{height:48px}
+.og .card.g{flex-direction:column;padding:36px 56px}
+.og .g .kicker{font-size:15px}
+.og .g h1{font-size:40px}
+.og .g .brand{margin-top:14px}
 .og .tiles{grid-template-columns:repeat(4,1fr);gap:18px;margin:auto 0 0}
 .og .tile b{font-size:72px}
 .og .tile span{font-size:17px}
@@ -261,7 +271,11 @@ def deputy_card_html(i, d, fmt):
     lead = f"<b style=\"color:{col}\">{gid}</b>{' · ' + esc(where) if where else ''}. Présence aux scrutins publics : <b>{rate} %</b>. A voté autrement que la majorité de son groupe <b>{ecarts} fois</b> ({pe} % de ses votes)."
     kicker = '<p class="kicker"><b>Assemblée nationale</b> · 17ᵉ législature · votes décisifs</p>'
     brand = '<div class="brand"><b>Ils votent <em>quoi</em> ?</b><span>ilsvotentquoi.fr · source : Assemblée nationale</span></div>'
-    body = f'<div class="card g">{kicker}<h1><i class="dot" style="background:{col};width:.55em;height:.55em"></i>{esc(d["nom"])} : que vote-t-{"elle" if d["nom"].startswith("Mme") else "il"} ?</h1><p class="lead">{lead}</p><div class="tiles">{tiles}</div>{bar}{brand}</div>'
+    photo = os.path.join(ROOT, "data", "raw", "photos", d["id"] + ".jpg"); pic = ""
+    if os.path.exists(photo):
+        import base64
+        pic = f'<img class="pic" src="data:image/jpeg;base64,{base64.b64encode(open(photo, "rb").read()).decode()}" style="border-color:{col}">'
+    body = f'<div class="card g">{kicker}<div class="head">{pic}<div><h1><i class="dot" style="background:{col};width:.55em;height:.55em"></i>{esc(d["nom"])} : que vote-t-{"elle" if d["nom"].startswith("Mme") else "il"} ?</h1><p class="lead">{lead}</p></div></div><div class="tiles">{tiles}</div>{bar}{brand}</div>'
     return f'<!doctype html><html lang="fr" class="{fmt}"><head><meta charset="utf-8">{FONTS}<style>{CSS}{GCSS}</style></head><body>{body}</body></html>'
 
 SIZES = {"og": (1200, 630), "carre": (1080, 1080), "story": (1080, 1920)}

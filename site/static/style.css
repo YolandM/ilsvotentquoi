@@ -185,3 +185,10 @@ h2.sec{font-family:var(--serif);font-size:22px;font-weight:700;margin:26px 0 8px
 .tx-list{font-family:var(--sans);font-size:14px;line-height:1.5}
 .tx-list a{text-decoration:none}
 .tx-list li{padding:6px 0;border-bottom:1px solid var(--rule-soft)}
+
+/* photos députés */
+.photo{display:inline-block;object-fit:cover;border:1px solid var(--rule);background:var(--panel);flex:none}
+.silhouette{background:var(--panel) radial-gradient(circle at 50% 38%,#c9c9c9 0 22%,transparent 23%),var(--panel) radial-gradient(ellipse at 50% 100%,#c9c9c9 0 40%,transparent 41%)}
+.dep-head{display:flex;gap:18px;align-items:flex-start;margin-bottom:12px}
+.dep-row{display:flex;gap:10px;align-items:center}
+.dep-row .photo{width:32px;height:41px}
