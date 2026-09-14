@@ -54,6 +54,10 @@ def positions(s):
     for k, l in [("pour", "Pour"), ("contre", "Contre"), ("abstention", "Abstention"), ("absent", "Absent")]:
         if by[k]: out.append(f'<div class="pos"><span class="pl">{l}</span>{chips(by[k])}</div>')
     return '<div class="positions">' + "".join(out) + "</div>"
+def has_card(s):
+    """Une carte pour les textes entiers, les motions et les amendements suivis (200 votants ou plus)."""
+    return s["k"] in ("e", "m") or s["v"] >= 200
+
 def group_at(dep, date):
     g = dep["g"][0][1]
     for d, gi in dep["g"]:
@@ -244,9 +248,9 @@ def main():
         for fmt, (w, h) in SIZES.items():
             if fmt in formats: pages[fmt] = b.new_page(viewport={"width": w, "height": h}, device_scale_factor=1)
         for i, s in enumerate(todo):
+            if not has_card(s): continue   # limite Cloudflare Pages : 20 000 fichiers par site
             for fmt, page in pages.items():
                 if fmt == "story" and s["k"] not in ("e", "m"): continue          # story : textes entiers et motions
-                if fmt == "carre" and s["k"] not in ("e", "m") and s["v"] < 200: continue   # carré : votes suivis
                 page.set_content(card_html(s, fmt), wait_until="load")
                 if i == 0: page.wait_for_timeout(1500)   # laisser les polices arriver la première fois
                 name = f"{s['n']}.png" if fmt == "og" else f"{s['n']}-{fmt}.png"

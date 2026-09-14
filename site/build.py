@@ -384,7 +384,7 @@ def build_methode():
 def build_recherche():
     """Index compact pour la recherche côté client + page de recherche."""
     idx = []
-    for s in sorted(S, key=lambda s: (s["k"] == "a", s["d"], s["n"]), reverse=False if False else True) if False else sorted(S, key=lambda s: (0 if s["k"] in ("e", "m") else 1, -int(s["d"].replace("-", "")), -s["n"])):
+    for s in sorted(S, key=lambda s: (0 if s["k"] in ("e", "m") else 1, -int(s["d"].replace("-", "")), -s["n"])):
         a = s.get("a") or {}
         idx.append([s["n"], s["d"], s["s"], s["k"], title_of(s)[:110], "" if s["k"] == "a" else TX[s["tx"]][:90], (a.get("au") or "")[:40], s["th"][0], s["url"].split("/")[2], s["t"][0], s["t"][1]])
     write("/api/index.json", json.dumps(idx, ensure_ascii=False, separators=(",", ":")))
