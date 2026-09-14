@@ -52,6 +52,10 @@ S_BY_N = {s["n"]: s for s in S}
 DEP_BY_I = {i: d for i, d in enumerate(DEPS)}
 for i, d in enumerate(DEPS): d["url"] = f"/depute/{d['slug']}-{d['id']}/"
 BUILD_DATE = datetime.date.today().isoformat()
+try:
+    from zoneinfo import ZoneInfo; _now = datetime.datetime.now(ZoneInfo("Europe/Paris"))
+except Exception: _now = datetime.datetime.now()
+BUILD_STAMP = f"{fdate(_now.date().isoformat())} à {_now.strftime('%Hh%M')}"
 LAST_VOTE = max(s["d"] for s in S)
 
 def title_of(s):
@@ -165,11 +169,11 @@ def layout(title, body, *, desc="", path="/", jsonld=None, og_image=None, curren
 {ld}{extra_head}
 </head>
 <body>
-<div class="topbar"><span>Assemblée nationale</span><span>17ᵉ législature</span><span>Scrutins publics</span><span>Données à jour au {fdate(LAST_VOTE)}</span></div>
+<div class="topbar"><span>Assemblée nationale</span><span>17ᵉ législature</span><span>Scrutins publics</span><span>Dernier vote : {fdate(LAST_VOTE)}</span><span>Mis à jour le {BUILD_STAMP}</span></div>
 <div class="masthead"><h1 class="brand"><a href="/" style="text-decoration:none">Ils votent <em>quoi</em> ?</a></h1><p class="tag">Les votes réels de chaque groupe et de chaque député, sujet par sujet</p></div>
 <div class="subnav"><span class="mini" aria-hidden="true"><a href="/" style="text-decoration:none">Ils votent <em>quoi</em> ?</a></span>{nav}</div>
 <div class="wrap">{body}</div>
-<footer class="note" style="max-width:1180px;margin:48px auto 0;padding:16px 16px 40px"><p><b>{NAME}</b> — un outil indépendant et sans parti pris. Source : open data de l'Assemblée nationale, mis à jour chaque nuit. Chaque vote renvoie au scrutin officiel. <a href="/methode/">Méthode</a> · <a href="/llms.txt">Données pour les IA</a> · <a href="/sitemap.xml">Plan du site</a>. Généré le {fdate(BUILD_DATE)}.</p></footer>
+<footer class="note" style="max-width:1180px;margin:48px auto 0;padding:16px 16px 40px"><p><b>{NAME}</b> — un outil indépendant et sans parti pris. Source : open data de l'Assemblée nationale, mis à jour chaque nuit. Chaque vote renvoie au scrutin officiel. <a href="/methode/">Méthode</a> · <a href="/llms.txt">Données pour les IA</a> · <a href="/sitemap.xml">Plan du site</a>. Site régénéré le {BUILD_STAMP} (heure de Paris) ; dernier scrutin public : {fdate(LAST_VOTE)}.</p></footer>
 <script src="/static/hemi.js" defer></script>
 </body></html>'''
 
@@ -352,27 +356,61 @@ def build_textes():
         path = f"/texte/{i}-{slug(t,50)}/"
         write(path, layout(f"{t[:80]} : les votes · {NAME}", body, desc=f"Tous les votes de l'Assemblée nationale sur : {t}.", path=path, current="votes"))
 
-def build_deputes():
+def group_at(d, date):
+    g = d["g"][0][1]
+    for dd, gi in d["g"]:
+        if dd <= date: g = gi
+    return ORDER[g]
+
+def deputy_stats(i, d):
+    """Chiffres bruts d'un député : présence, votes, essentiel, écarts avec la majorité de son groupe."""
     LBL = {"P": "pour", "C": "contre", "A": "abstention", "N": "non-votant"}
+    my = []; cnt = {"P": 0, "C": 0, "A": 0, "N": 0}; present = 0; eligible = 0
+    ess = {"pour": 0, "contre": 0, "abstention": 0, "absent": 0}; ecarts = []
+    for s in S:
+        v = s["vote"][i] if i < len(s["vote"]) else "."
+        in_mandate = d["f"] <= s["d"] <= d["l"]
+        if in_mandate: eligible += 1
+        if v != ".": cnt[v] += 1; present += v in "PCA"
+        if v != "." and s["k"] != "a": my.append((s, v))
+        if s["k"] in ("e", "m") and in_mandate:
+            ess[LBL[v] if v in "PCA" else "absent"] += 1
+        if v in "PCA":
+            gid = group_at(d, s["d"]); g = s["gm"].get(gid)
+            if g and gid != "NI":
+                gp = group_pos(g)
+                if gp != "absent" and gp != LBL[v]: ecarts.append((s, v, gp))
+    my.sort(key=lambda x: x[0]["d"], reverse=True)
+    ecarts.sort(key=lambda x: (x[0]["k"] not in ("e", "m"), -int(x[0]["d"].replace("-", ""))))
+    return {"my": my, "cnt": cnt, "present": present, "eligible": eligible, "rate": round(100 * present / max(1, eligible)),
+            "ess": ess, "ecarts": ecarts, "LBL": LBL}
+
+def build_deputes():
     rows_index = []
     for i, d in enumerate(DEPS):
-        my = []; cnt = {"P": 0, "C": 0, "A": 0, "N": 0}; present = 0; eligible = 0
-        for s in S:
-            v = s["vote"][i] if i < len(s["vote"]) else "."
-            if d["f"] <= s["d"] <= d["l"]: eligible += 1
-            if v != ".": cnt[v] += 1; present += v in "PCA"
-            if v != "." and s["k"] != "a": my.append((s, v))
-        my.sort(key=lambda x: x[0]["d"], reverse=True)
+        st = deputy_stats(i, d); LBL = st["LBL"]; cnt = st["cnt"]; rate = st["rate"]; ess = st["ess"]; ecarts = st["ecarts"]
         gid = ORDER[d["g"][-1][1]]
-        rate = round(100 * present / max(1, eligible))
-        table = "".join(f'<tr><td><a href="{s["url"]}">{esc(title_of(s))}</a></td><td>{fdate(s["d"])}</td><td class="v">{LBL[v]}</td><td>{"adopté" if s["s"] else "rejeté"}</td></tr>' for s, v in my)
+        n_ess = sum(ess.values()); n_part = cnt["P"] + cnt["C"] + cnt["A"]
+        table = "".join(f'<tr><td><a href="{s["url"]}">{esc(title_of(s))}</a></td><td>{fdate(s["d"])}</td><td class="v">{LBL[v]}</td><td>{"adopté" if s["s"] else "rejeté"}</td></tr>' for s, v in st["my"])
+        ec_rows = "".join(f'<li><a href="{s["url"]}">{esc(title_of(s))}</a> <span style="color:var(--muted)">· {fdate(s["d"])} · a voté <b>{LBL[v]}</b>, son groupe {gp}</span></li>' for s, v, gp in ecarts[:40])
+        MORE40 = "Les 40 plus significatifs (textes entiers et motions d'abord)."
+        ECARTS = (f'<h2 class="sec">Ses écarts avec son groupe</h2><p class="hint">Les {len(ecarts)} scrutins où {esc(d["nom"])} a voté autrement que la majorité de son groupe ({(f"{100*len(ecarts)/max(1,n_part):.1f}".replace(".", ",") if 100*len(ecarts)/max(1,n_part) < 1 else str(round(100*len(ecarts)/max(1,n_part)))) } % de ses votes). Fait brut, sans interprétation : un écart peut être un désaccord comme une consigne de vote. {MORE40 if len(ecarts) > 40 else ""}</p><ul class="tx-list">{ec_rows}</ul>') if ecarts else ""
+        share = f'<div class="share"><button type="button" data-share>Partager</button><a href="/og/depute-{d["id"]}-carre.png" download>Image carrée</a></div>'
         body = f'''<div class="grid">{sidebar(None, THEME_COUNTS)}<main class="main"><p class="crumbs"><a href="/deputes/">Députés</a> › {esc(d['nom'])}</p>
 <p class="lede"><b>{esc(d['nom'])}</b>{(", "+esc(d['dept'])+(" ("+d['circo']+"ᵉ circonscription)" if d['circo'] else "")) if d['dept'] else ""}. Groupe <a href="/groupe/{gid.lower()}/"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:{COL[gid]};vertical-align:middle"></span> {esc(GN[gid])}</a>.</p>
 <div class="stat-row"><div class="stat"><b>{rate} %</b><span>de présence aux scrutins publics</span></div><div class="stat"><b>{cnt['P']}</b><span>votes pour</span></div><div class="stat"><b>{cnt['C']}</b><span>votes contre</span></div><div class="stat"><b>{cnt['A']}</b><span>abstentions</span></div></div>
-<p class="hint">Présence = a pris part au vote (pour, contre ou abstention) sur les {eligible} scrutins tenus pendant son mandat. Le tableau liste les votes sur les textes entiers, articles et motions ; les votes sur amendements sont consultables scrutin par scrutin.</p>
+<p class="hint">Présence = a pris part au vote (pour, contre ou abstention) sur les {st['eligible']} scrutins tenus pendant son mandat.</p>
+{share}
+<h2 class="sec">Sur l'essentiel</h2>
+<p class="hint">Les {n_ess} <a href="/essentiels/">votes décisifs</a> tenus pendant son mandat (lois entières, motions de rejet, motions de censure).</p>
+<div class="stat-row"><div class="stat"><b>{ess['pour']}</b><span>pour</span></div><div class="stat"><b>{ess['contre']}</b><span>contre</span></div><div class="stat"><b>{ess['abstention']}</b><span>abstentions</span></div><div class="stat"><b>{ess['absent']}</b><span>absent ou non-votant</span></div></div>
+{ECARTS}
+<h2 class="sec">Ses votes sur les textes entiers, articles et motions</h2>
+<p class="hint">Les votes sur amendements sont consultables scrutin par scrutin.</p>
 <table class="deps"><thead><tr><th>Vote</th><th>Date</th><th>Position</th><th>Résultat</th></tr></thead><tbody>{table}</tbody></table></main></div>'''
         jsonld = {"@context": "https://schema.org", "@type": "Person", "name": d["nom"], "jobTitle": "Député·e", "memberOf": {"@type": "Organization", "name": GN[gid]}, "url": SITE + d["url"]}
-        write(d["url"], layout(f"{d['nom']} : ses votes à l'Assemblée · {NAME}", body, desc=f"Les votes de {d['nom']} ({gid}) à l'Assemblée nationale : présence {rate} %, {cnt['P']} pour, {cnt['C']} contre, {cnt['A']} abstentions.", path=d["url"], jsonld=jsonld, current="deputes"))
+        desc = f"Les votes de {d['nom']} ({gid}) à l'Assemblée nationale : présence {rate} %, {cnt['P']} pour, {cnt['C']} contre, {cnt['A']} abstentions. Sur les votes décisifs : {ess['pour']} pour, {ess['contre']} contre. {len(ecarts)} écarts avec son groupe."
+        write(d["url"], layout(f"{d['nom']} : ses votes à l'Assemblée · {NAME}", body, desc=desc, path=d["url"], jsonld=jsonld, current="deputes", og_image=f"{SITE}/og/depute-{d['id']}.png"))
         rows_index.append((d["famille"] or d["nom"], f'<li><a href="{d["url"]}">{esc(d["nom"])}</a> <span style="color:var(--muted)">· {gid}{(" · "+esc(d["dept"])) if d["dept"] else ""} · présence {rate} %</span></li>'))
     rows_index.sort(key=lambda x: norm(x[0]))
     ONINPUT = "const q=this.value.toLowerCase();document.querySelectorAll('.tx-list li').forEach(l=>l.hidden=!l.textContent.toLowerCase().includes(q))"

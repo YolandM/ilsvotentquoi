@@ -235,6 +235,35 @@ def group_card_html(gid, fmt):
     body = f'<div class="card g" style="--c:{col}">{kicker}<h1><i class="dot" style="background:{col};width:.55em;height:.55em"></i>{esc(q)}</h1><p class="lead">{lead}</p><div class="tiles">{tiles}</div>{bar}{brand}</div>'
     return f'<!doctype html><html lang="fr" class="{fmt}"><head><meta charset="utf-8">{FONTS}<style>{CSS}{GCSS}</style></head><body>{body}</body></html>'
 
+def deputy_card_html(i, d, fmt):
+    """Carte d'un député : présence, votes décisifs, écarts avec son groupe. Chiffres bruts."""
+    LBL = {"P": "pour", "C": "contre", "A": "abstention"}
+    ess = {"pour": 0, "contre": 0, "abstention": 0, "absent": 0}; present = eligible = ecarts = 0
+    for s in D["scrutins"]:
+        v = s["vote"][i] if i < len(s["vote"]) else "."
+        inm = d["f"] <= s["d"] <= d["l"]
+        if inm: eligible += 1
+        if v in "PCA": present += 1
+        if s["k"] in ("e", "m") and inm: ess[LBL[v] if v in "PCA" else "absent"] += 1
+        if v in "PCA":
+            gid = group_at(d, s["d"]); g = next((x for x in s["g"] if x[0] == gid), None)
+            if g and gid != "NI":
+                gp = group_pos(g)
+                if gp != "absent" and gp != LBL[v]: ecarts += 1
+    gid = ORDER[d["g"][-1][1]]; col = COL[gid]; n = sum(ess.values())
+    rate = round(100 * present / max(1, eligible)); pe = (f"{100 * ecarts / max(1, present):.1f}".replace(".", ",") if ecarts and 100 * ecarts / present < 1 else str(round(100 * ecarts / max(1, present))))
+    tex = {"pour": f"background:{col}", "contre": f"background:repeating-linear-gradient(-45deg,{col} 0 4px,#fff 4px 8px)",
+           "abstention": f"background:repeating-linear-gradient(45deg,{col} 0 3px,#fff 3px 8px)", "absent": "background:#fff"}
+    tiles = "".join(f'<div class="tile"><b>{ess[k]}</b><span><i class="dot" style="{tex[k]};border:2px solid {col}"></i>{l}</span><small>sur {n} votes décisifs</small></div>'
+                    for k, l in [("pour", "pour"), ("contre", "contre"), ("abstention", "abstentions"), ("absent", "absent")])
+    bar = '<div class="bar">' + "".join(f'<i style="width:{100*ess[k]/max(1,n):.1f}%;{tex[k]}"></i>' for k in ("pour","contre","abstention","absent")) + "</div>"
+    where = (d["dept"] + (f", {d['circo']}ᵉ circonscription" if d["circo"] else "")) if d["dept"] else ""
+    lead = f"<b style=\"color:{col}\">{gid}</b>{' · ' + esc(where) if where else ''}. Présence aux scrutins publics : <b>{rate} %</b>. A voté autrement que la majorité de son groupe <b>{ecarts} fois</b> ({pe} % de ses votes)."
+    kicker = '<p class="kicker"><b>Assemblée nationale</b> · 17ᵉ législature · votes décisifs</p>'
+    brand = '<div class="brand"><b>Ils votent <em>quoi</em> ?</b><span>ilsvotentquoi.fr · source : Assemblée nationale</span></div>'
+    body = f'<div class="card g">{kicker}<h1><i class="dot" style="background:{col};width:.55em;height:.55em"></i>{esc(d["nom"])} : que vote-t-{"elle" if d["nom"].startswith("Mme") else "il"} ?</h1><p class="lead">{lead}</p><div class="tiles">{tiles}</div>{bar}{brand}</div>'
+    return f'<!doctype html><html lang="fr" class="{fmt}"><head><meta charset="utf-8">{FONTS}<style>{CSS}{GCSS}</style></head><body>{body}</body></html>'
+
 SIZES = {"og": (1200, 630), "carre": (1080, 1080), "story": (1080, 1920)}
 
 def main():
@@ -261,6 +290,13 @@ def main():
             for fmt, page in pages.items():
                 page.set_content(group_card_html(gid, fmt), wait_until="load"); page.wait_for_timeout(300)
                 page.screenshot(path=os.path.join(OUT, f"groupe-{gid.lower()}{'' if fmt=='og' else '-'+fmt}.png"), type="png")
+        # cartes par député (lien + carré)
+        for i, d in enumerate(DEPS):
+            for fmt, page in pages.items():
+                if fmt == "story": continue
+                page.set_content(deputy_card_html(i, d, fmt), wait_until="load")
+                page.screenshot(path=os.path.join(OUT, f"depute-{d['id']}{'' if fmt=='og' else '-'+fmt}.png"), type="png")
+            if i % 100 == 0: print(f"députés {i}/{len(DEPS)}", file=sys.stderr, flush=True)
         # image par défaut du site
         pg = b.new_page(viewport={"width": 1200, "height": 630})
         pg.set_content(f'<!doctype html><html class="og"><head><meta charset="utf-8">{FONTS}<style>{CSS}</style></head><body><div class="card" style="flex-direction:column;justify-content:center;align-items:center;text-align:center"><h1 style="font-size:84px">Ils votent <span style="font-weight:300">quoi</span> ?</h1><p class="sub" style="font-size:26px;margin-top:18px">Les votes réels de chaque groupe et de chaque député, sujet par sujet</p><p class="tex" style="display:block;margin-top:40px">ilsvotentquoi.fr · source : Assemblée nationale</p></div></body></html>')
