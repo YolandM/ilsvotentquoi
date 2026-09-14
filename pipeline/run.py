@@ -14,7 +14,7 @@ Sources (17e législature) : data.assemblee-nationale.fr
 
 Aucune dépendance hors bibliothèque standard.
 """
-import collections, glob, html, io, json, os, re, sqlite3, sys, unicodedata, urllib.request, zipfile
+import time, collections, glob, html, io, json, os, re, sqlite3, sys, unicodedata, urllib.request, zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(ROOT, "data", "raw")
@@ -54,12 +54,19 @@ def fetch():
     for name, url in SOURCES.items():
         dest = os.path.join(RAW, name)
         log(f"↓ {name}  {url}")
-        try:
-            with urllib.request.urlopen(url, timeout=900) as r:
-                data = r.read()
-        except Exception as e:
-            if name in OPTIONAL: log(f"  (optionnel, ignoré : {e})"); continue
-            raise
+        data = None
+        for attempt in range(1, 5):   # le serveur de l'Assemblée est parfois lent ou coupe : on réessaie
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "ilsvotentquoi.fr (bot open data)"})
+                with urllib.request.urlopen(req, timeout=600) as r:
+                    data = r.read()
+                break
+            except Exception as e:
+                log(f"  essai {attempt} raté : {e}")
+                if attempt < 4: time.sleep(60 * attempt)
+        if data is None:
+            if name in OPTIONAL: log("  (optionnel, ignoré)"); continue
+            raise SystemExit(f"téléchargement impossible : {name}")
         with zipfile.ZipFile(io.BytesIO(data)) as z:
             z.extractall(dest)
         log(f"  ok, {len(data)//1024//1024} Mo")
