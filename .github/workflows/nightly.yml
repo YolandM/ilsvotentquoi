@@ -8,6 +8,10 @@ on:
     branches: [main]
     paths: ["site/**", "pipeline/**", ".github/workflows/**"]
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
@@ -38,5 +42,13 @@ jobs:
             -d "{\"host\":\"ilsvotentquoi.fr\",\"key\":\"${{ secrets.INDEXNOW_KEY }}\",\"keyLocation\":\"https://ilsvotentquoi.fr/${{ secrets.INDEXNOW_KEY }}.txt\",\"urlList\":[\"https://ilsvotentquoi.fr/\",\"https://ilsvotentquoi.fr/sitemap.xml\"]}" || true
       - name: Rapport
         run: |
-          echo "### Textes sans thème (à ajouter dans pipeline/textes_themes.json)" >> $GITHUB_STEP_SUMMARY
-          python -c "import json;d=json.load(open('data/textes_sans_theme.json'));print('\n'.join(f'- {k} ({v} votes)' for k,v in sorted(d.items(),key=lambda x:-x[1])) or 'aucun')" >> $GITHUB_STEP_SUMMARY
+          echo "### Textes classés automatiquement (absents de pipeline/textes_themes.json)" >> $GITHUB_STEP_SUMMARY
+          python -c "import json;d=json.load(open('data/textes_sans_theme.json'));print('\n'.join(f\"- {k} → {'/'.join(v['themes'])} ({v['votes']} votes, {v['confiance']})\" for k,v in sorted(d.items(),key=lambda x:-x[1]['votes'])) or 'aucun')" >> $GITHUB_STEP_SUMMARY
+      - name: Alerte en cas d'échec
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "Échec de la mise à jour nocturne du $(date -u +%Y-%m-%d)" \
+            --body "Le run a échoué : ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. Le site reste sur sa version précédente. Si le run suivant passe, cette issue peut être fermée." || true

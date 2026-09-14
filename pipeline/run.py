@@ -207,16 +207,26 @@ KW = {
 }
 KW = {k: re.compile(v) for k, v in KW.items()}
 
+BUDGET_RX = re.compile(r"loi de finances|financement de la securite sociale|reglement du budget|approbation des comptes|fin de gestion")
+def auto_theme(title):
+    """Classement automatique d'un texte absent de textes_themes.json : mots-clés sur son titre.
+    Les budgets sont transversaux (chaque amendement est classé d'après son contenu)."""
+    txt = norm(title)
+    if BUDGET_RX.search(txt): return {"themes": ["economie-entreprises"], "transversal": True, "confiance": "auto"}
+    scores = sorted(((len(rx.findall(txt)), k) for k, rx in KW.items() if rx.search(txt)), reverse=True)
+    found = [k for v, k in scores][:2]
+    return {"themes": found or ["institutions-libertes"], "transversal": False, "confiance": "auto" if found else "auto-defaut"}
+
 def classify(scrutins, amdts):
     """Thème du texte parent (pipeline/textes_themes.json, éditable à la main) ;
     pour les textes transversaux (budgets) et tous les amendements, on ajoute les thèmes détectés dans le contenu."""
     tt = json.load(open(os.path.join(ROOT, "pipeline", "textes_themes.json"), encoding="utf-8"))
-    unknown = collections.Counter()
+    unknown = collections.Counter(); auto = {}
     for s in scrutins.values():
         meta = tt.get(s["textkey"])
         if not meta:
             unknown[s["textkey"]] += 1
-            meta = {"themes": ["institutions-libertes"], "transversal": False}
+            meta = auto.setdefault(s["textkey"], auto_theme(s["textkey"]))
         themes = list(meta["themes"]); method = "texte"
         a = amdts.get(s.get("amdt"))
         if a:
@@ -231,9 +241,9 @@ def classify(scrutins, amdts):
                 method = "texte+amendement" if found else "texte"
         s["themes"] = themes; s["method"] = method
     if unknown:
-        log(f"⚠ {len(unknown)} textes sans thème dans textes_themes.json (ajoutez-les) :")
-        for k, v in unknown.most_common(20): log(f"   {v:4}  {k[:100]}")
-    json.dump({k: v for k, v in unknown.items()}, open(os.path.join(OUT, "textes_sans_theme.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        log(f"ℹ {len(unknown)} textes classés automatiquement (absents de textes_themes.json) :")
+        for k, v in unknown.most_common(20): log(f"   {v:4}  {'/'.join(auto[k]['themes']):28} {k[:80]}")
+    json.dump({k: {"votes": v, **auto[k]} for k, v in unknown.items()}, open(os.path.join(OUT, "textes_sans_theme.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
 def build():
     os.makedirs(OUT, exist_ok=True)

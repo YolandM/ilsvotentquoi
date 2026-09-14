@@ -8,7 +8,7 @@ Une page par scrutin, par sujet, par groupe, par groupe×sujet, par texte de loi
 Tout est du HTML complet (lisible par Google et par les IA), le JavaScript n'ajoute que
 l'hémicycle interactif et le tableau nominatif.
 """
-import datetime, html, json, math, os, re, shutil, sys, unicodedata
+import collections, datetime, html, json, math, os, re, shutil, sys, unicodedata
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data", "site.json")
@@ -173,13 +173,17 @@ def layout(title, body, *, desc="", path="/", jsonld=None, og_image=None, curren
 <div class="masthead"><h1 class="brand"><a href="/" style="text-decoration:none">Ils votent <em>quoi</em> ?</a></h1><p class="tag">Les votes réels de chaque groupe et de chaque député, sujet par sujet</p></div>
 <div class="subnav"><span class="mini" aria-hidden="true"><a href="/" style="text-decoration:none">Ils votent <em>quoi</em> ?</a></span>{nav}</div>
 <div class="wrap">{body}</div>
-<footer class="note" style="max-width:1180px;margin:48px auto 0;padding:16px 16px 40px"><p><b>{NAME}</b> — un outil indépendant et sans parti pris. Source : open data de l'Assemblée nationale, mis à jour chaque nuit. Chaque vote renvoie au scrutin officiel. <a href="/methode/">Méthode</a> · <a href="/llms.txt">Données pour les IA</a> · <a href="/sitemap.xml">Plan du site</a>. Site régénéré le {BUILD_STAMP} (heure de Paris) ; dernier scrutin public : {fdate(LAST_VOTE)}.</p></footer>
+<footer class="note" style="max-width:1180px;margin:48px auto 0;padding:16px 16px 40px"><p><b>{NAME}</b> — un outil indépendant et sans parti pris. Source : open data de l'Assemblée nationale, mis à jour chaque nuit. Chaque vote renvoie au scrutin officiel. <a href="/methode/">Méthode</a> · <a href="/llms.txt">Données pour les IA</a> · <a href="/sitemap.xml">Plan du site</a> · <a href="/statut/">Statut</a>. Site régénéré le {BUILD_STAMP} (heure de Paris) ; dernier scrutin public : {fdate(LAST_VOTE)}.</p></footer>
 <script src="/static/hemi.js" defer></script>
 </body></html>'''
 
 def sidebar(current=None, counts=None):
     CUR = ' aria-current="page"'
     items = [f'<a class="subj" href="/"{CUR if current=="all" else ""}><span>Tous les votes</span><small>{len(S)}</small></a>',
+             f'<a class="subj" href="/cette-semaine/"><span>Cette semaine</span><small>7 j</small></a>',
+             f'<a class="subj" href="/budget/"><span>Les budgets</span><small></small></a>',
+             f'<a class="subj" href="/comparer/"><span>Comparer 2 groupes</span><small></small></a>',
+             f'<a class="subj" href="/mon-depute/"><span>Mon député</span><small></small></a>',
              f'<a class="subj" href="/essentiels/"{CUR if current=="essentiels" else ""}><span>L\'essentiel</span><small>{sum(1 for s in S if s["k"] in ("e","m"))}</small></a>']
     for t, l in THEME_LABEL.items():
         items.append(f'<a class="subj" href="/sujet/{t}/"{CUR if current==t else ""}><span>{l}</span><small>{counts.get(t,0) if counts else ""}</small></a>')
@@ -471,6 +475,109 @@ document.getElementById('f').addEventListener('submit',function(e){e.preventDefa
 <script>{JS}</script></main></div>'''
     write("/recherche/", layout(f"Recherche · {NAME}", body, desc="Cherchez un vote de l'Assemblée nationale par mot-clé, député, sujet ou numéro de scrutin.", path="/recherche/", current="recherche", extra_head=f"<script>window.IVQ.themes={json.dumps(THEME_LABEL, ensure_ascii=False)}</script>"))
 
+def build_statut():
+    """Page et JSON de statut : le site tourne-t-il ? Les données bougent-elles ?"""
+    last = max(S, key=lambda s: (s["d"], s["n"]))
+    n7 = sum(1 for s in S if s["d"] >= (datetime.date.fromisoformat(BUILD_DATE) - datetime.timedelta(days=7)).isoformat())
+    days = (datetime.date.fromisoformat(BUILD_DATE) - datetime.date.fromisoformat(LAST_VOTE)).days
+    write("/api/statut.json", json.dumps({"genere_le": _now.isoformat(timespec="minutes"), "dernier_scrutin": LAST_VOTE, "numero_dernier_scrutin": last["n"],
+                                          "scrutins": len(S), "deputes": len(DEPS), "textes": len(TX), "scrutins_7_jours": n7, "jours_depuis_dernier_vote": days}))
+    body = f'''<div class="grid">{sidebar(None, THEME_COUNTS)}<main class="main"><p class="lede"><b>Statut.</b> Le site se régénère chaque nuit à partir de l'open data de l'Assemblée. Voici où il en est.</p>
+<div class="stat-row"><div class="stat"><b>{BUILD_STAMP.split(" à ")[1]}</b><span>dernière régénération, le {BUILD_STAMP.split(" à ")[0]}</span></div><div class="stat"><b>{fdate(LAST_VOTE)}</b><span>dernier scrutin public (nº {last["n"]})</span></div><div class="stat"><b>{n7}</b><span>scrutins ces 7 derniers jours</span></div><div class="stat"><b>{len(S):,}</b><span>scrutins au total</span></div></div>
+<p class="hint">{"L'Assemblée n'a pas tenu de scrutin public depuis " + str(days) + " jours : vacances parlementaires ou semaine sans séance. Le site continue de se régénérer chaque nuit et affichera le prochain vote le lendemain matin." if days > 10 else "Le dernier vote date de moins de dix jours : le site suit l'actualité."}</p>
+<div class="qa"><h2>Comment vérifier</h2><p>Le bandeau noir en haut de chaque page indique la date du dernier vote et l'heure de la dernière régénération. Le même statut est disponible en JSON : <a href="/api/statut.json">/api/statut.json</a>. Le code et l'historique des mises à jour sont publics sur <a href="https://github.com/YolandM/ilsvotentquoi" rel="noopener">GitHub</a>.</p></div>
+</main></div>'''.replace(",", " ", 0)
+    write("/statut/", layout(f"Statut du site · {NAME}", body.replace(f"{len(S):,}", f"{len(S):,}".replace(",", " ")), desc="Le site est-il à jour ? Date du dernier scrutin et de la dernière régénération.", path="/statut/", current=None))
+
+def build_semaine():
+    """Cette semaine à l'Assemblée : les scrutins des 7 derniers jours, décisifs d'abord."""
+    since = (datetime.date.fromisoformat(BUILD_DATE) - datetime.timedelta(days=7)).isoformat()
+    week = sorted([s for s in S if s["d"] >= since], key=lambda s: (0 if s["k"] in ("e", "m") else 1, -int(s["d"].replace("-", "")), -s["n"]))
+    finals = [s for s in week if s["k"] in ("e", "m")]; amd = [s for s in week if s["k"] not in ("e", "m")]
+    if week:
+        lede = f"<b>Cette semaine à l'Assemblée.</b> {len(week)} scrutins publics depuis le {fdate(since)} : {len(finals)} votes décisifs (lois entières, motions) et {len(amd)} votes sur amendements ou articles."
+        body_list = "".join(entry(s) for s in finals) + (f'<h2 class="sec">Amendements et articles</h2>' + "".join(entry(s) for s in amd[:60]) if amd else "")
+    else:
+        lede = f"<b>Cette semaine à l'Assemblée.</b> Aucun scrutin public depuis le {fdate(since)}. Dernier vote : le {fdate(LAST_VOTE)}."
+        recent = sorted([s for s in S if s["k"] in ("e", "m")], key=lambda s: (s["d"], s["n"]), reverse=True)[:10]
+        body_list = '<h2 class="sec">En attendant, les derniers votes décisifs</h2>' + "".join(entry(s) for s in recent)
+    body = f'''<div class="grid">{sidebar(None, THEME_COUNTS)}<main class="main"><p class="lede">{lede}</p>
+<p class="hint">Page régénérée chaque nuit. Les votes décisifs d'abord, puis les amendements. <a href="/statut/">Statut du site</a>.</p>
+<div class="share"><button type="button" data-share>Partager cette semaine</button></div>
+<div class="list">{body_list}</div></main></div>'''
+    write("/cette-semaine/", layout(f"Cette semaine à l'Assemblée · {NAME}", body, desc="Les votes de l'Assemblée nationale des 7 derniers jours, groupe par groupe.", path="/cette-semaine/", current="votes"))
+
+BUDGET_RX = re.compile(r"(loi de finances(?: rectificative| de fin de gestion)? pour (\d{4}))|(financement de la s[ée]curit[ée] sociale pour (\d{4}))", re.I)
+def build_budgets():
+    """Une page par budget (PLF + PLFSS d'une même année) : tous les scrutins, décisifs d'abord. Créée automatiquement dès le premier vote."""
+    years = {}
+    for i, tx in enumerate(TX):
+        m = BUDGET_RX.search(tx)
+        if m: years.setdefault(m.group(2) or m.group(4), []).append(i)
+    out = []
+    for y in sorted(years, reverse=True):
+        idx = set(years[y]); votes = [s for s in S if s["tx"] in idx]
+        finals = sorted([s for s in votes if s["k"] in ("e", "m")], key=lambda s: (s["d"], s["n"]), reverse=True)
+        byt = collections.Counter(s["th"][0] for s in votes)
+        lede = f"<b>Budget {y}.</b> {len(votes)} scrutins publics sur le projet de loi de finances et le financement de la sécurité sociale pour {y} : {len(finals)} votes décisifs, {len(votes)-len(finals)} amendements et articles."
+        themes = "".join(f'<li><a href="/sujet/{k}/"><b>{THEME_LABEL[k]}</b></a> · {v} votes</li>' for k, v in byt.most_common())
+        NOFINAL = "<p class=\"hint\">Pas encore de vote sur l'ensemble du texte.</p>"
+        texts = "".join(f'<li><a href="/texte/{i}-{slug(TX[i],50)}/">{esc(TX[i])}</a></li>' for i in years[y])
+        body = f'''<div class="grid">{sidebar(None, THEME_COUNTS)}<main class="main"><p class="crumbs"><a href="/budget/">Budgets</a> › {y}</p><p class="lede">{lede}</p>
+<p class="hint">Les amendements budgétaires sont classés par sujet d'après leur contenu (méthode automatique, voir <a href="/methode/">Méthode</a>).</p>
+<h2 class="sec">Les textes</h2><ul class="tx-list">{texts}</ul>
+<h2 class="sec">Votes décisifs</h2><div class="list">{"".join(entry(s) for s in finals) or NOFINAL}</div>
+<h2 class="sec">Par sujet</h2><ul class="tx-list">{themes}</ul></main></div>'''
+        write(f"/budget/{y}/", layout(f"Budget {y} : qui a voté quoi ? · {NAME}", body, desc=f"Tous les votes de l'Assemblée nationale sur le budget {y} (PLF et PLFSS), groupe par groupe.", path=f"/budget/{y}/", current="votes"))
+        out.append(f'<li><a href="/budget/{y}/"><b>Budget {y}</b></a> · {len(votes)} scrutins · {len(finals)} votes décisifs</li>')
+    body = f'<div class="grid">{sidebar(None, THEME_COUNTS)}<main class="main"><p class="lede"><b>Les budgets.</b> Loi de finances et financement de la sécurité sociale, année par année. Une page apparaît automatiquement dès le premier scrutin sur un nouveau budget.</p><ul class="tx-list">{"".join(out)}</ul></main></div>'
+    write("/budget/", layout(f"Les budgets : qui a voté quoi ? · {NAME}", body, desc="Les votes de l'Assemblée nationale sur chaque budget, année par année.", path="/budget/", current="votes"))
+    return [f"/budget/{y}/" for y in years]
+
+def build_comparer():
+    """Comparer deux groupes sur les votes décisifs : côté client, à partir d'un petit JSON."""
+    ess = sorted([s for s in S if s["k"] in ("e", "m")], key=lambda s: (s["d"], s["n"]), reverse=True)
+    data = {"groupes": ORDER, "noms": GN, "couleurs": COL, "votes": [[s["n"], s["d"], title_of(s)[:110], s["url"].split("/")[2], s["s"], {g: group_pos(s["gm"][g]) for g in ORDER if g in s["gm"]}] for s in ess]}
+    write("/api/essentiel-groupes.json", json.dumps(data, ensure_ascii=False, separators=(",", ":")))
+    JS = """
+(function(){var A=document.getElementById('a'),B=document.getElementById('b'),out=document.getElementById('out'),sum=document.getElementById('sum'),D=null;
+var P={pour:'pour',contre:'contre',abstention:'abstention',absent:'absent'};
+function fd(d){var m=['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];return parseInt(d.slice(8))+' '+m[parseInt(d.slice(5,7))-1]+' '+d.slice(0,4);}
+function esc(s){return s.replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function chip(g,p){var c=D.couleurs[g];var st=p=='pour'?'background:'+c+';color:#fff':p=='contre'?'background:repeating-linear-gradient(-45deg,'+c+' 0 2px,#fff 2px 4px);color:#000;text-shadow:0 0 4px #fff,0 0 4px #fff,0 0 2px #fff':p=='abstention'?'background:repeating-linear-gradient(45deg,'+c+' 0 2px,#fff 2px 5px);color:#000;text-shadow:0 0 4px #fff,0 0 4px #fff,0 0 2px #fff':'background:#fff;box-shadow:inset 0 0 0 1px '+c+';color:#000';return '<span class="pill" style="'+st+'">'+g+' : '+p+'</span>';}
+function run(){if(!D)return;var a=A.value,b=B.value;if(a==b){sum.textContent='Choisissez deux groupes différents.';out.innerHTML='';return;}
+ var same=0,diff=0,rows=[];D.votes.forEach(function(v){var pa=v[5][a],pb=v[5][b];if(!pa||!pb)return;var opp=(pa=='pour'&&pb=='contre')||(pa=='contre'&&pb=='pour');if(pa==pb)same++;else diff++;if(pa!=pb)rows.push('<li'+(opp?' style="font-weight:600"':'')+'><a href="/vote/'+v[3]+'/">'+esc(v[2])+'</a> <span style="color:var(--muted)">· '+fd(v[1])+' · '+(v[4]?'adopté':'rejeté')+'</span><br>'+chip(a,pa)+' '+chip(b,pb)+'</li>');});
+ sum.innerHTML='<b>'+D.noms[a]+'</b> et <b>'+D.noms[b]+'</b> ont pris la même position sur <b>'+same+'</b> votes décisifs et une position différente sur <b>'+diff+'</b> ('+Math.round(100*same/Math.max(1,same+diff))+' % d\\'accord). Ci-dessous, les votes où ils divergent, les oppositions franches en gras.';
+ out.innerHTML=rows.join('');history.replaceState(null,'','?a='+a+'&b='+b);}
+fetch('/api/essentiel-groupes.json').then(function(r){return r.json();}).then(function(d){D=d;var u=new URLSearchParams(location.search);if(u.get('a'))A.value=u.get('a');if(u.get('b'))B.value=u.get('b');run();});
+A.addEventListener('change',run);B.addEventListener('change',run);})();
+"""
+    opts = lambda sel: "".join(f'<option value="{g}"{" selected" if g==sel else ""}>{g} · {esc(GN[g])}</option>' for g in ORDER)
+    body = f'''<div class="grid">{sidebar("essentiels", THEME_COUNTS)}<main class="main"><p class="lede"><b>Comparer deux groupes.</b> Sur les {len(ess)} votes décisifs (lois entières, motions), où sont-ils d'accord, où divergent-ils ?</p>
+<p class="hint">Position majoritaire de chaque groupe à chaque scrutin. Règle fixe, aucune sélection. <a href="/methode/">Méthode</a>.</p>
+<div class="share" style="gap:12px;flex-wrap:wrap"><select id="a" class="search" style="max-width:300px;margin:0">{opts("RN")}</select><span>contre</span><select id="b" class="search" style="max-width:300px;margin:0">{opts("LFI")}</select></div>
+<p id="sum" class="lede" style="font-size:20px;margin-top:18px"></p><ul class="tx-list" id="out"></ul><script>{JS}</script></main></div>'''
+    write("/comparer/", layout(f"Comparer deux groupes · {NAME}", body, desc="Comparez les votes de deux groupes de l'Assemblée nationale sur les lois et motions décisives.", path="/comparer/", current="essentiels"))
+
+def build_mon_depute():
+    """Mon député : par département, avec photo, groupe et présence."""
+    by = collections.defaultdict(list)
+    for i, d in enumerate(DEPS):
+        if d["dept"] and d["l"] >= LAST_VOTE: by[d["dept"]].append(d)
+    def circ_key(d):
+        try: return int(d["circo"])
+        except Exception: return 999
+    sections = []
+    for dept in sorted(by, key=norm):
+        rows = "".join(f'<li class="dep-row">{photo_tag(d, 40)}<span><a href="{d["url"]}">{esc(d["nom"])}</a> <span style="color:var(--muted)">· {d["circo"]+"ᵉ circonscription · " if d["circo"] else ""}<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:{COL[ORDER[d["g"][-1][1]]]}"></span> {ORDER[d["g"][-1][1]]}</span></span></li>' for d in sorted(by[dept], key=circ_key))
+        sections.append(f'<details class="dept" id="{slug(dept)}"><summary><b>{esc(dept)}</b> <span style="color:var(--muted)">· {len(by[dept])} député{"s" if len(by[dept])>1 else ""}</span></summary><ul class="tx-list">{rows}</ul></details>')
+    ONINPUT = "const q=this.value.toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'');document.querySelectorAll('.dept').forEach(d=>{const h=d.textContent.toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').includes(q);d.hidden=!h;d.open=q.length>1&&h;})"
+    body = f'''<div class="grid">{sidebar(None, THEME_COUNTS)}<main class="main"><p class="lede"><b>Mon député.</b> Cherchez votre département ou votre ville, puis votre circonscription. Députés en exercice uniquement.</p>
+<input class="search" type="search" placeholder="Département, ou nom du député" oninput="{esc(ONINPUT)}" style="max-width:100%;font-size:17px;padding:10px 14px">
+<p class="hint">Vous ne connaissez pas votre circonscription ? Le site de l'Assemblée la donne à partir de votre adresse : <a href="https://www2.assemblee-nationale.fr/deputes/liste/regions" rel="noopener">assemblee-nationale.fr</a>.</p>
+{"".join(sections)}</main></div>'''
+    write("/mon-depute/", layout(f"Mon député : qui vote quoi dans ma circonscription ? · {NAME}", body, desc="Trouvez votre député par département et circonscription, et voyez ce qu'il ou elle a voté.", path="/mon-depute/", current="deputes"))
+
 def build_meta(urls):
     write("/sitemap.xml", '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + "".join(f"<url><loc>{SITE}{u}</loc><lastmod>{BUILD_DATE}</lastmod></url>" for u in urls) + "</urlset>")
     write("/robots.txt", f"User-agent: *\nAllow: /\nSitemap: {SITE}/sitemap.xml\n")
@@ -485,6 +592,7 @@ def build_meta(urls):
 - Par groupe : {SITE}/groupe/<sigle>/, {SITE}/groupe/<sigle>/essentiels/ (votes décisifs) et {SITE}/groupe/<sigle>/<sujet>/ — sigles : {", ".join(g.lower() for g in ORDER)}
 - Par député : {SITE}/depute/<slug>-<id>/
 - Méthode : {SITE}/methode/
+- Cette semaine (7 derniers jours) : {SITE}/cette-semaine/ · Budgets : {SITE}/budget/<année>/ · Comparer deux groupes : {SITE}/comparer/?a=RN&b=LFI · Mon député : {SITE}/mon-depute/ · Statut : {SITE}/statut/ et {SITE}/api/statut.json
 - Recherche : {SITE}/recherche/?q=<mots> (index JSON : {SITE}/api/index.json)
 
 ## Données brutes
@@ -521,7 +629,8 @@ def main():
     fetch_photos()
     if os.path.isdir(PHOTOS): shutil.copytree(PHOTOS, os.path.join(DIST, "photos"))
     build_lists(); build_essentiels(); build_votes(); build_groups(); build_textes(); build_deputes(); build_methode(); build_recherche()
-    urls = ["/", "/essentiels/", "/recherche/", "/essentiels/motions-de-censure/", "/sujets/", "/groupes/", "/deputes/", "/methode/"] + [f"/sujet/{t}/" for t in THEME_LABEL] + [f"/groupe/{g.lower()}/" for g in ORDER] + [f"/groupe/{g.lower()}/essentiels/" for g in ORDER] + \
+    build_statut(); build_semaine(); build_comparer(); build_mon_depute(); budget_urls = build_budgets()
+    urls = ["/", "/essentiels/", "/recherche/", "/cette-semaine/", "/comparer/", "/mon-depute/", "/budget/", "/statut/"] + budget_urls + [ "/essentiels/motions-de-censure/", "/sujets/", "/groupes/", "/deputes/", "/methode/"] + [f"/sujet/{t}/" for t in THEME_LABEL] + [f"/groupe/{g.lower()}/" for g in ORDER] + [f"/groupe/{g.lower()}/essentiels/" for g in ORDER] + \
            [f"/groupe/{g.lower()}/{t}/" for g in ORDER for t in THEME_LABEL] + [s["url"] for s in S] + [d["url"] for d in DEPS] + [f"/texte/{i}-{slug(t,50)}/" for i, t in enumerate(TX)]
     build_meta(urls)
     n = sum(len(f) for _, _, f in os.walk(DIST)); sz = sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(DIST) for f in fs)
