@@ -59,7 +59,16 @@ def title_of(s):
     if s["k"] == "a" and s.get("a"):
         a = s["a"]; who = a["au"] + (f" ({a['gr']})" if a["gr"] else "")
         return f"Amendement de {who} · {TX[s['tx']]}"
+    if s["k"] == "m":
+        who = re.search(r"par (?:MM\.|Mmes|M\.|Mme) ([^,]+?)(?:,| et | du | de la | des |\.$|$)", s["ti"])
+        who = who.group(1).strip() if who else ""
+        if "censure" in s["ti"].lower(): return "Motion de censure" + (f" déposée par {who}" if who else "")
+        return "Motion de rejet préalable" + (f" de {who}" if who else "") + f" · {TX[s['tx']]}"
     return clean_title(s["ti"])
+
+def has_card(s):
+    """Même règle que site/cards.py : carte pour les textes entiers, motions et amendements à 200 votants ou plus."""
+    return s["k"] in ("e", "m") or s["v"] >= 200
 
 def group_pos(g):
     if g["pour"] + g["contre"] + g["abstention"] == 0: return "absent"
@@ -71,6 +80,7 @@ def sentence(s):
     res = "adopté" if s["s"] else "rejeté"
     what = title_of(s); what = what[0].lower() + what[1:]
     if s["k"] == "a": what = f"l'{s['ti'][2:]}" if s["ti"].lower().startswith("l'") else s["ti"]
+    if s["k"] == "m": what = "la " + what.split(" · ")[0]
     base = f"Le {fdate(s['d'])}, l'Assemblée nationale a <b>{res}</b> {esc(what.rstrip('.'))} par <b>{s['t'][0]} voix pour</b>, <b>{s['t'][1]} contre</b> et <b>{s['t'][2]} abstentions</b> ({s['v']} votants sur 577)."
     by = {"pour": [], "contre": [], "abstention": [], "absent": []}
     for gid in ORDER:
@@ -125,7 +135,7 @@ def entry(s, compact=True):
     return f'''<article class="entry">
   <div class="cat"><span><b><a href="/sujet/{s['th'][0]}/" style="text-decoration:none;color:inherit">{THEME_LABEL[s['th'][0]]}</a></b> · {KIND.get(s['k'],'Vote')} · <time datetime="{s['d']}">{fdate(s['d'])}</time></span><span>Scrutin nº {s['n']}</span></div>
   <h3><a href="{s['url']}">{esc(title_of(s))}</a></h3>
-  {f'<p class="off">{esc(clean_title(s["ti"]))}</p>' if s['k']=="a" else ""}
+  {f'<p class="off">{esc(clean_title(s["ti"]))}</p>' if s['k'] in ("a", "m") else ""}
   {why}
   <div class="result"><span class="pill {'ok' if ok else 'no'}">{'Adopté' if ok else 'Rejeté'}</span><span class="tally"><b>{s['t'][0]}</b> pour · <b>{s['t'][1]}</b> contre · <b>{s['t'][2]}</b> abst.</span><span>{s['v']} votants sur 577</span></div>
   {mini_bar(s)}
@@ -277,10 +287,10 @@ def build_votes():
 <article class="entry" style="border:0">
   <div class="cat"><span>{KIND.get(s['k'],'Vote')} · <time datetime="{s['d']}">{fdate(s['d'])}</time> · <a href="/texte/{s['tx']}-{slug(TX[s['tx']],50)}/">{esc(TX[s['tx']][:90])}</a></span><span>Scrutin nº {s['n']}</span></div>
   <h1 style="font-family:var(--serif);font-size:clamp(26px,3.4vw,36px);line-height:1.15;font-weight:400;margin:8px 0 0;max-width:30ch;text-wrap:balance">{esc(t)}</h1>
-  {f'<p class="off">{esc(clean_title(s["ti"]))}</p>' if s['k']=="a" else ""}
+  {f'<p class="off">{esc(clean_title(s["ti"]))}</p>' if s['k'] in ("a", "m") else ""}
   <div class="result"><span class="pill {'ok' if ok else 'no'}">{'Adopté' if ok else 'Rejeté'}</span><span class="tally"><b>{s['t'][0]}</b> pour · <b>{s['t'][1]}</b> contre · <b>{s['t'][2]}</b> abst.</span><span>{s['v']} votants sur 577</span></div>
   <p class="summary-text">{sentence(s)}</p>
-  <div class="share"><button type="button" data-share>Partager</button><a href="/og/{s['n']}.png" download>Image pour les réseaux</a><a href="https://www.assemblee-nationale.fr/dyn/17/scrutins/{s['n']}" rel="noopener" target="_blank">Scrutin officiel ↗</a></div>
+  <div class="share"><button type="button" data-share>Partager</button>{f'<a href="/og/{s["n"]}-carre.png" download>Image carrée</a>' if has_card(s) else ""}{f'<a href="/og/{s["n"]}-story.png" download>Image story</a>' if s["k"] in ("e", "m") else ""}<a href="https://www.assemblee-nationale.fr/dyn/17/scrutins/{s['n']}" rel="noopener" target="_blank">Scrutin officiel ↗</a></div>
   <div class="hlegend" style="margin-top:18px"><span>● Pour</span><span>⊗ Contre</span><span>▨ Abstention</span><span>○ Absent ou non-votant</span><span>· couleur = groupe</span><label class="toggle" style="margin-left:auto"><input type="checkbox" id="cvd"> Couleurs adaptées</label></div>
   <div class="hemi-wrap" data-vote="{s['vote']}" data-date="{s['d']}"><noscript>Activez JavaScript pour l'hémicycle interactif ; le détail par député est dans le tableau ci-dessous.</noscript></div>
   {group_table(s)}
@@ -288,7 +298,7 @@ def build_votes():
   <h2 class="sec">Le vote de chaque député</h2>
   <div id="deps"><p class="hint">Chargement du tableau nominatif…</p></div>
 </article></main></div>'''
-        write(s["url"], layout(f"{q} · {NAME}", body, desc=desc, path=s["url"], jsonld=jsonld, og_image=f"{SITE}/og/{s['n']}.png", current="votes"))
+        write(s["url"], layout(f"{q} · {NAME}", body, desc=desc, path=s["url"], jsonld=jsonld, og_image=f"{SITE}/og/{s['n']}.png" if has_card(s) else None, current="votes"))
 
 def build_group_theme(gid, t, items):
     votes = [s for s in items if gid in s["gm"]]
