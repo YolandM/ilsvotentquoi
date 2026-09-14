@@ -382,11 +382,23 @@ def deputy_stats(i, d):
                 if gp != "absent" and gp != LBL[v]: ecarts.append((s, v, gp))
     my.sort(key=lambda x: x[0]["d"], reverse=True)
     ecarts.sort(key=lambda x: (x[0]["k"] not in ("e", "m"), -int(x[0]["d"].replace("-", ""))))
+    n_ess = sum(ess.values())
     return {"my": my, "cnt": cnt, "present": present, "eligible": eligible, "rate": round(100 * present / max(1, eligible)),
-            "ess": ess, "ecarts": ecarts, "LBL": LBL}
+            "ess": ess, "ess_rate": round(100 * (n_ess - ess["absent"]) / max(1, n_ess)), "ecarts": ecarts, "LBL": LBL}
+
+def compute_medians():
+    """Médianes de présence sur tous les députés ayant plus de 100 scrutins de mandat (repère, pas jugement)."""
+    import statistics
+    r, e = [], []
+    for i, d in enumerate(DEPS):
+        st = deputy_stats(i, d)
+        if st["eligible"] > 100: r.append(st["rate"]); e.append(st["ess_rate"])
+    return round(statistics.median(r)), round(statistics.median(e))
 
 def build_deputes():
     rows_index = []
+    MED, MED_ESS = compute_medians()
+    write("/api/medianes.json", json.dumps({"presence": MED, "presence_essentiel": MED_ESS}))
     for i, d in enumerate(DEPS):
         st = deputy_stats(i, d); LBL = st["LBL"]; cnt = st["cnt"]; rate = st["rate"]; ess = st["ess"]; ecarts = st["ecarts"]
         gid = ORDER[d["g"][-1][1]]
@@ -398,8 +410,8 @@ def build_deputes():
         share = f'<div class="share"><button type="button" data-share>Partager</button><a href="/og/depute-{d["id"]}-carre.png" download>Image carrée</a></div>'
         body = f'''<div class="grid">{sidebar(None, THEME_COUNTS)}<main class="main"><p class="crumbs"><a href="/deputes/">Députés</a> › {esc(d['nom'])}</p>
 <div class="dep-head">{photo_tag(d, 96)}<p class="lede" style="margin:0"><b>{esc(d['nom'])}</b>{(", "+esc(d['dept'])+(" ("+d['circo']+"ᵉ circonscription)" if d['circo'] else "")) if d['dept'] else ""}. Groupe <a href="/groupe/{gid.lower()}/"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:{COL[gid]};vertical-align:middle"></span> {esc(GN[gid])}</a>.</p></div>
-<div class="stat-row"><div class="stat"><b>{rate} %</b><span>de présence aux scrutins publics</span></div><div class="stat"><b>{cnt['P']}</b><span>votes pour</span></div><div class="stat"><b>{cnt['C']}</b><span>votes contre</span></div><div class="stat"><b>{cnt['A']}</b><span>abstentions</span></div></div>
-<p class="hint">Présence = a pris part au vote (pour, contre ou abstention) sur les {st['eligible']} scrutins tenus pendant son mandat.</p>
+<div class="stat-row"><div class="stat"><b>{rate} %</b><span>de présence, tous scrutins<br><small>médiane des députés : {MED} %</small></span></div><div class="stat"><b>{st['ess_rate']} %</b><span>de présence, votes décisifs<br><small>médiane : {MED_ESS} %</small></span></div><div class="stat"><b>{cnt['P']}</b><span>votes pour</span></div><div class="stat"><b>{cnt['C']}</b><span>votes contre</span></div></div>
+<p class="hint">Présence = a pris part au vote (pour, contre ou abstention). « Tous scrutins » : les {st['eligible']} scrutins publics tenus pendant son mandat, y compris les milliers de votes sur amendements en séance de nuit, d'où des taux bas pour tout le monde. « Votes décisifs » : lois entières et motions. La médiane est donnée comme repère, pas comme norme.</p>
 {share}
 <h2 class="sec">Sur l'essentiel</h2>
 <p class="hint">Les {n_ess} <a href="/essentiels/">votes décisifs</a> tenus pendant son mandat (lois entières, motions de rejet, motions de censure).</p>
@@ -409,9 +421,9 @@ def build_deputes():
 <p class="hint">Les votes sur amendements sont consultables scrutin par scrutin.</p>
 <table class="deps"><thead><tr><th>Vote</th><th>Date</th><th>Position</th><th>Résultat</th></tr></thead><tbody>{table}</tbody></table></main></div>'''
         jsonld = {"@context": "https://schema.org", "@type": "Person", "name": d["nom"], "jobTitle": "Député·e", **({"image": f"{SITE}/photos/{d['id']}.jpg"} if has_photo(d) else {}), "memberOf": {"@type": "Organization", "name": GN[gid]}, "url": SITE + d["url"]}
-        desc = f"Les votes de {d['nom']} ({gid}) à l'Assemblée nationale : présence {rate} %, {cnt['P']} pour, {cnt['C']} contre, {cnt['A']} abstentions. Sur les votes décisifs : {ess['pour']} pour, {ess['contre']} contre. {len(ecarts)} écarts avec son groupe."
+        desc = f"Les votes de {d['nom']} ({gid}) à l'Assemblée nationale : présence {rate} % (médiane {MED} %), {st['ess_rate']} % sur les votes décisifs, {cnt['P']} pour, {cnt['C']} contre, {cnt['A']} abstentions. Sur les votes décisifs : {ess['pour']} pour, {ess['contre']} contre. {len(ecarts)} écarts avec son groupe."
         write(d["url"], layout(f"{d['nom']} : ses votes à l'Assemblée · {NAME}", body, desc=desc, path=d["url"], jsonld=jsonld, current="deputes", og_image=f"{SITE}/og/depute-{d['id']}.png"))
-        rows_index.append((d["famille"] or d["nom"], f'<li class="dep-row">{photo_tag(d, 32)}<span><a href="{d["url"]}">{esc(d["nom"])}</a> <span style="color:var(--muted)">· {gid}{(" · "+esc(d["dept"])) if d["dept"] else ""} · présence {rate} %</span></span></li>'))
+        rows_index.append((d["famille"] or d["nom"], f'<li class="dep-row">{photo_tag(d, 32)}<span><a href="{d["url"]}">{esc(d["nom"])}</a> <span style="color:var(--muted)">· {gid}{(" · "+esc(d["dept"])) if d["dept"] else ""} · présence {rate} % · décisifs {st["ess_rate"]} %</span></span></li>'))
     rows_index.sort(key=lambda x: norm(x[0]))
     ONINPUT = "const q=this.value.toLowerCase();document.querySelectorAll('.tx-list li').forEach(l=>l.hidden=!l.textContent.toLowerCase().includes(q))"
     body = f'<div class="grid">{sidebar(None, THEME_COUNTS)}<main class="main"><p class="lede"><b>Par député.</b> {len(DEPS)} députés ayant siégé pendant la législature.</p><input class="search" type="search" placeholder="Nom, département, groupe" oninput="{esc(ONINPUT)}"><ul class="tx-list">{"".join(r for _, r in rows_index)}</ul></main></div>'
@@ -421,6 +433,7 @@ def build_deputes():
 def build_methode():
     body = f'''<div class="grid">{sidebar(None, THEME_COUNTS)}<main class="main"><p class="lede"><b>Méthode.</b> Comment ce site est fabriqué, et ce qu'il ne fait pas.</p>
 <div class="qa"><h2>D'où viennent les chiffres</h2><p>De l'open data de l'Assemblée nationale : scrutins, amendements, dossiers législatifs et liste des députés de la 17ᵉ législature. Le site est régénéré chaque nuit. Chaque page de vote renvoie au scrutin officiel. Les groupes sont affichés dans l'ordre de l'hémicycle, de gauche à droite, avec les couleurs que l'Assemblée publie elle-même. « Absent » = membres du groupe moins votants et non-votants déclarés. Les photos des députés sont les portraits officiels publiés par l'Assemblée nationale.</p></div>
+<div class="qa"><h2>La présence</h2><p>Présence = le député a pris part au vote (pour, contre ou abstention) sur les scrutins publics tenus pendant son mandat. Tous scrutins confondus, les taux sont bas pour tout le monde (médiane autour de 23 %), parce que des milliers de votes portent sur des amendements en séance de nuit devant quelques dizaines de députés. Le taux sur les votes décisifs (lois entières, motions) est plus parlant. La médiane des députés est affichée comme repère, pas comme norme.</p></div>
 <div class="qa"><h2>« L'essentiel »</h2><p>Cette page n'est pas un choix éditorial. Elle applique une règle fixe : tous les votes sur l'ensemble d'un texte (le moment où une loi est adoptée ou rejetée), toutes les motions de rejet préalable et toutes les motions de censure. Rien d'autre, rien de moins. Les amendements, même très commentés, restent dans « Tous les votes » et dans les pages par sujet.</p></div>
 <div class="qa"><h2>Comment les votes sont rangés par sujet</h2><p>Chaque vote est rattaché à son texte de loi ; chaque texte est classé dans un à trois sujets (liste publique, corrigeable). Pour les budgets, qui touchent à tout, chaque amendement est classé d'après son contenu par mots-clés. Le classement est automatique ; les erreurs peuvent être signalées et sont corrigées dans le fichier public de classement.</p></div>
 <div class="qa"><h2>« L'auteur explique »</h2><p>Pour un amendement, la phrase affichée est l'exposé sommaire écrit par le député qui l'a déposé. C'est son argument, pas une description neutre : il est cité comme tel, avec son nom et son groupe.</p></div>

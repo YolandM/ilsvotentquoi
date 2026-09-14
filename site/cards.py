@@ -261,6 +261,8 @@ def deputy_card_html(i, d, fmt):
                 gp = group_pos(g)
                 if gp != "absent" and gp != LBL[v]: ecarts += 1
     gid = ORDER[d["g"][-1][1]]; col = COL[gid]; n = sum(ess.values())
+    med = json.load(open(os.path.join(ROOT, "dist", "api", "medianes.json"))) if os.path.exists(os.path.join(ROOT, "dist", "api", "medianes.json")) else {"presence": 23, "presence_essentiel": 43}
+    ess_rate = round(100 * (n - ess["absent"]) / max(1, n))
     rate = round(100 * present / max(1, eligible)); pe = (f"{100 * ecarts / max(1, present):.1f}".replace(".", ",") if ecarts and 100 * ecarts / present < 1 else str(round(100 * ecarts / max(1, present))))
     tex = {"pour": f"background:{col}", "contre": f"background:repeating-linear-gradient(-45deg,{col} 0 4px,#fff 4px 8px)",
            "abstention": f"background:repeating-linear-gradient(45deg,{col} 0 3px,#fff 3px 8px)", "absent": "background:#fff"}
@@ -268,7 +270,7 @@ def deputy_card_html(i, d, fmt):
                     for k, l in [("pour", "pour"), ("contre", "contre"), ("abstention", "abstentions"), ("absent", "absent")])
     bar = '<div class="bar">' + "".join(f'<i style="width:{100*ess[k]/max(1,n):.1f}%;{tex[k]}"></i>' for k in ("pour","contre","abstention","absent")) + "</div>"
     where = (d["dept"] + (f", {d['circo']}ᵉ circonscription" if d["circo"] else "")) if d["dept"] else ""
-    lead = f"<b style=\"color:{col}\">{gid}</b>{' · ' + esc(where) if where else ''}. Présence aux scrutins publics : <b>{rate} %</b>. A voté autrement que la majorité de son groupe <b>{ecarts} fois</b> ({pe} % de ses votes)."
+    lead = f"<b style=\"color:{col}\">{gid}</b>{' · ' + esc(where) if where else ''}. Présence : <b>{rate} %</b> tous scrutins (médiane des députés {med["presence"]} %), <b>{ess_rate} %</b> sur les votes décisifs (médiane {med["presence_essentiel"]} %). A voté autrement que la majorité de son groupe <b>{ecarts} fois</b> ({pe} % de ses votes)."
     kicker = '<p class="kicker"><b>Assemblée nationale</b> · 17ᵉ législature · votes décisifs</p>'
     brand = '<div class="brand"><b>Ils votent <em>quoi</em> ?</b><span>ilsvotentquoi.fr · source : Assemblée nationale</span></div>'
     photo = os.path.join(ROOT, "data", "raw", "photos", d["id"] + ".jpg"); pic = ""
