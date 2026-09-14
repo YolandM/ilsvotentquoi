@@ -231,3 +231,5 @@ h2.sec{font-family:var(--serif);font-size:22px;font-weight:700;margin:26px 0 8px
 .vc h3 a{text-decoration:none}
 .vc h3 a:hover{text-decoration:underline}
 .vc .pill{letter-spacing:.08em}
+.pill.vpos{background:#fff;color:#000;border:1.5px solid #000;padding-left:8px;text-shadow:none}
+.pill.vpos i{display:inline-block;width:11px;height:11px;margin-right:6px;vertical-align:-1px;border-radius:2px}

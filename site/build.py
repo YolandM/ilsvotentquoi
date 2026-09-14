@@ -51,6 +51,11 @@ for s in S:
 S_BY_N = {s["n"]: s for s in S}
 DEP_BY_I = {i: d for i, d in enumerate(DEPS)}
 for i, d in enumerate(DEPS): d["url"] = f"/depute/{d['slug']}-{d['id']}/"
+import hashlib
+def _asset_v(name):
+    try: return hashlib.md5(open(os.path.join(STATIC, name), "rb").read()).hexdigest()[:8]
+    except Exception: return "0"
+CSS_V, JS_V = _asset_v("style.css"), _asset_v("hemi.js")
 BUILD_DATE = datetime.date.today().isoformat()
 try:
     from zoneinfo import ZoneInfo; _now = datetime.datetime.now(ZoneInfo("Europe/Paris"))
@@ -163,7 +168,7 @@ def layout(title, body, *, desc="", path="/", jsonld=None, og_image=None, curren
 <meta property="og:type" content="article"><meta property="og:site_name" content="{NAME}"><meta property="og:title" content="{esc(title)}"><meta property="og:description" content="{esc(desc[:200])}"><meta property="og:url" content="{canonical}"><meta property="og:image" content="{og}"><meta property="og:locale" content="fr_FR">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{esc(title)}"><meta name="twitter:image" content="{og}">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,700;1,6..72,400&family=Public+Sans:wght@400;600;700&display=swap">
-<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/style.css?v={CSS_V}">
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <script>window.IVQ={{colors:{json.dumps(COL)},names:{json.dumps(GN, ensure_ascii=False)}}};</script>
 {ld}{extra_head}
@@ -174,7 +179,7 @@ def layout(title, body, *, desc="", path="/", jsonld=None, og_image=None, curren
 <div class="subnav"><span class="mini" aria-hidden="true"><a href="/" style="text-decoration:none">Ils votent <em>quoi</em> ?</a></span>{nav}</div>
 <div class="wrap">{body}</div>
 <footer class="note" style="max-width:1180px;margin:48px auto 0;padding:16px 16px 40px"><p><b>{NAME}</b> — un outil indépendant et sans parti pris. Source : open data de l'Assemblée nationale, mis à jour chaque nuit. Chaque vote renvoie au scrutin officiel. <a href="/methode/">Méthode</a> · <a href="/llms.txt">Données pour les IA</a> · <a href="/sitemap.xml">Plan du site</a> · <a href="/statut/">Statut</a>. Site régénéré le {BUILD_STAMP} (heure de Paris) ; dernier scrutin public : {fdate(LAST_VOTE)}.</p></footer>
-<script src="/static/hemi.js" defer></script>
+<script src="/static/hemi.js?v={JS_V}" defer></script>
 </body></html>'''
 
 def sidebar(current=None, counts=None):
@@ -411,9 +416,10 @@ def build_deputes():
         col = COL[gid]
         def vote_card(s, v):
             lab, st = POS[v]; ok = s["s"] == 1
+            sw = st.split(";")[0].replace("%s", col) if v != "N" else f"background:#fff;box-shadow:inset 0 0 0 1.5px {col}"
             return (f'<article class="vc" data-v="{v}"><div class="cat"><span><b>{THEME_LABEL[s["th"][0]]}</b> · {KIND.get(s["k"], "Vote")} · <time datetime="{s["d"]}">{fdate(s["d"])}</time></span><span>nº {s["n"]}</span></div>'
                     f'<h3><a href="{s["url"]}">{esc(title_of(s))}</a></h3>'
-                    f'<div class="result"><span class="pill" style="{st.replace("%s", col)}">{lab}</span><span class="pill {"ok" if ok else "no"}">{"Adopté" if ok else "Rejeté"}</span><span class="tally">{s["t"][0]} pour · {s["t"][1]} contre · {s["t"][2]} abst.</span></div></article>')
+                    f'<div class="result"><span class="pill vpos" style="border-color:{col}"><i style="{sw}"></i>{lab}</span><span class="pill {"ok" if ok else "no"}">{"Adopté" if ok else "Rejeté"}</span><span class="tally">{s["t"][0]} pour · {s["t"][1]} contre · {s["t"][2]} abst.</span></div></article>')
         cards = "".join(vote_card(s, v) for s, v in st["my"])
         nv = len(st["my"]); npos = {k: sum(1 for _, v in st["my"] if v == k) for k in "PCAN"}
         ec_rows = "".join(f'<li><a href="{s["url"]}">{esc(title_of(s))}</a> <span style="color:var(--muted)">· {fdate(s["d"])} · a voté <b>{LBL[v]}</b>, son groupe {gp}</span></li>' for s, v, gp in ecarts[:40])
