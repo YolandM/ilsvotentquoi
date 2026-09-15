@@ -179,7 +179,7 @@ def layout(title, body, *, desc="", path="/", jsonld=None, og_image=None, curren
 <div class="masthead"><h1 class="brand"><a href="/" style="text-decoration:none">Ils votent <em>quoi</em> ?</a></h1><p class="tag">Les votes réels de chaque groupe et de chaque député, sujet par sujet</p></div>
 <div class="subnav"><span class="mini" aria-hidden="true"><a href="/" style="text-decoration:none">Ils votent <em>quoi</em> ?</a></span>{nav}</div>
 <div class="wrap">{body}</div>
-<footer class="note" style="max-width:1180px;margin:48px auto 0;padding:16px 16px 40px"><p><b>{NAME}</b> — un outil indépendant et sans parti pris. Source : open data de l'Assemblée nationale, mis à jour chaque nuit. Chaque vote renvoie au scrutin officiel. <a href="/methode/">Méthode</a> · <a href="/llms.txt">Données pour les IA</a> · <a href="/sitemap.xml">Plan du site</a> · <a href="/statut/">Statut</a>. Site régénéré le {BUILD_STAMP} (heure de Paris) ; dernier scrutin public : {fdate(LAST_VOTE)}.</p></footer>
+<footer class="note" style="max-width:1180px;margin:48px auto 0;padding:16px 16px 40px"><p><b>{NAME}</b> — un outil indépendant et sans parti pris. Source : open data de l'Assemblée nationale, mis à jour chaque nuit. Chaque vote renvoie au scrutin officiel. <a href="/methode/">Méthode</a> · <a href="/llms.txt">Données pour les IA</a> · <a href="/sitemap.xml">Plan du site</a> · <a href="/statut/">Statut</a> · <a href="https://www.instagram.com/ilsvotentquoi/" rel="noopener">Instagram @ilsvotentquoi</a>. Site régénéré le {BUILD_STAMP} (heure de Paris) ; dernier scrutin public : {fdate(LAST_VOTE)}.</p></footer>
 <script src="/static/hemi.js?v={JS_V}" defer></script>
 </body></html>'''
 
@@ -294,7 +294,7 @@ def build_votes():
             why = "<div class=\"qa\"><h2>Ce que l'auteur de l'amendement explique</h2><p>« " + esc(a["ex"]) + " »</p><p class=\"hint\" style=\"margin-top:6px\">Exposé sommaire déposé par " + esc(a["au"]) + gr + ". C'est son argument, cité tel quel.</p>" + \
                   ("<h2 style=\"margin-top:14px\">Texte de l'amendement</h2><p class=\"disp\" style=\"display:block;background:var(--panel);padding:10px 12px;font-family:var(--sans);font-size:14px\">" + esc(a["di"]) + "</p>" if a["di"] else "") + "</div>"
         jsonld = {"@context": "https://schema.org", "@type": "Article", "headline": q, "datePublished": s["d"], "dateModified": BUILD_DATE,
-                  "inLanguage": "fr", "isBasedOn": f"https://www.assemblee-nationale.fr/dyn/17/scrutins/{s['n']}", "publisher": {"@type": "Organization", "name": NAME, "url": SITE},
+                  "inLanguage": "fr", "isBasedOn": f"https://www.assemblee-nationale.fr/dyn/17/scrutins/{s['n']}", "publisher": {"@type": "Organization", "name": NAME, "url": SITE, "sameAs": ["https://www.instagram.com/ilsvotentquoi/"]},
                   "about": [THEME_LABEL[x] for x in s["th"]], "description": desc}
         body = f'''<div class="grid">{sidebar(s['th'][0], THEME_COUNTS)}<main class="main">
 <p class="crumbs"><a href="/">Tous les votes</a> › <a href="/sujet/{s['th'][0]}/">{THEME_LABEL[s['th'][0]]}</a> › Scrutin nº {s['n']}</p>
