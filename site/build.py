@@ -171,6 +171,7 @@ def layout(title, body, *, desc="", path="/", jsonld=None, og_image=None, curren
 <link rel="stylesheet" href="/static/style.css?v={CSS_V}">
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <script>window.IVQ={{colors:{json.dumps(COL)},names:{json.dumps(GN, ensure_ascii=False)}}};</script>
+<script defer src="https://cloud.umami.is/script.js" data-website-id="4136aa31-e420-4fd2-b46c-357053864d74"></script>
 {ld}{extra_head}
 </head>
 <body>
@@ -496,6 +497,7 @@ function run(){var v=norm(q.value.trim());if(!I){out.innerHTML='<p class="hint">
  out.innerHTML=r.map(function(s){return '<li><a href="/vote/'+s[8]+'/">'+esc(s[4])+'</a> <span style="color:var(--muted)">· '+K[s[3]]+' · '+fd(s[1])+' · '+TH[s[7]]+' · <b>'+(s[2]?'adopté':'rejeté')+'</b> '+s[9]+'/'+s[10]+(s[6]?' · '+esc(s[6]):'')+'</span></li>';}).join('');}
 fetch('/api/index.json').then(function(r){return r.json();}).then(function(d){I=d;for(var i=0;i<I.length;i++){var s=I[i];s[12]=norm(s[4]+' '+s[5]+' '+s[6]+' '+String(s[0])+' '+s[1]+' '+TH[s[7]]+' '+K[s[3]]);}run();});
 q.addEventListener('input',run);var u=new URLSearchParams(location.search).get('q');if(u){q.value=u;}
+var tm=null;q.addEventListener('input',function(){clearTimeout(tm);tm=setTimeout(function(){if(q.value.trim().length>2&&window.umami){umami.track('recherche',{q:q.value.trim().toLowerCase().slice(0,60)});}},1500);});
 document.getElementById('f').addEventListener('submit',function(e){e.preventDefault();history.replaceState(null,'','?q='+encodeURIComponent(q.value));run();});})();
 """
     body = f'''<div class="grid">{sidebar(None, THEME_COUNTS)}<main class="main"><p class="lede"><b>Recherche.</b> Un mot, un nom de député, un numéro de scrutin, un sujet. Tous les {len(S)} votes, en direct.</p>

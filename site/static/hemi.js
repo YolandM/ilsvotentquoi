@@ -53,7 +53,7 @@
       tip();
     });
     const cvd=document.querySelector("#cvd"); if(cvd){ cvd.checked=COL===COL_CVD; cvd.addEventListener("change",()=>{ try{localStorage.setItem("ivq-cvd",cvd.checked?"1":"0");}catch(e){} location.reload(); }); }
-    document.querySelectorAll("[data-share]").forEach(b=>b.addEventListener("click",async()=>{ const url=location.href, title=document.title;
+    document.querySelectorAll("[data-share]").forEach(b=>b.addEventListener("click",async()=>{ if(window.umami) umami.track("partage",{page:location.pathname}); const url=location.href, title=document.title;
       if(navigator.share){ try{ await navigator.share({title,url}); }catch(e){} } else { await navigator.clipboard.writeText(url); b.textContent="Lien copié"; } }));
   }
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",init); else init();
