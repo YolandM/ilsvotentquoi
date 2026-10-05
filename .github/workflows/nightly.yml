@@ -29,6 +29,14 @@ jobs:
         run: python site/build.py
       - name: Générer les cartes de partage
         run: python site/cards.py
+      - name: Restaurer les reels déjà produits
+        uses: actions/cache@v4
+        with:
+          path: dist/reels
+          key: reels-${{ github.run_id }}
+          restore-keys: reels-
+      - name: Générer les reels (votes décisifs sans reel)
+        run: python site/reels.py
       - name: Publier sur Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:

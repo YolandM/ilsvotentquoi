@@ -137,7 +137,8 @@ footer.note b{color:var(--ink)}
 .glegend i{width:10px;height:10px;border-radius:50%;display:inline-block}
 .glegend small{color:var(--muted)}
 .gt{margin-top:14px;font-family:var(--sans);font-size:12.5px;font-variant-numeric:tabular-nums}
-.gt .r{display:grid;grid-template-columns:minmax(150px,200px) 1fr repeat(4,44px);gap:0 10px;align-items:center;padding:3px 0}
+.gt .r{display:grid;grid-template-columns:minmax(150px,200px) 1fr repeat(4,44px) 72px;gap:0 10px;align-items:center;padding:3px 0}
+.gt .pc{text-align:right;line-height:1.05}.gt .pc b{font-size:13px}.gt .pc small{display:block;font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .gt .r.h{color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase;border-bottom:1px solid var(--rule);padding-bottom:6px;margin-bottom:4px}
 .gt .r.h div{text-align:right}
 .gt .r.h .n,.gt .r.h .b{text-align:left}
@@ -148,7 +149,7 @@ footer.note b{color:var(--ink)}
 .gt .c{text-align:right;color:var(--muted)}
 .gt .c b{color:var(--ink);font-weight:700}
 .gt .c.z{color:var(--rule)}
-@media (max-width:640px){.gt .r{grid-template-columns:56px 1fr repeat(4,34px);gap:0 6px;font-size:11.5px}.gt .n small{display:none}}
+@media (max-width:640px){.gt .r{grid-template-columns:56px 1fr repeat(4,34px) 52px;gap:0 6px;font-size:11.5px}.gt .pc small{display:none}.gt .n small{display:none}}
 .toggle{display:inline-flex;align-items:center;gap:6px;font-family:var(--sans);font-size:12px;color:var(--muted);cursor:pointer}
 .groups{display:none}
 .showall .groups{display:grid}
@@ -233,3 +234,7 @@ h2.sec{font-family:var(--serif);font-size:22px;font-weight:700;margin:26px 0 8px
 .vc .pill{letter-spacing:.08em}
 .pill.vpos{background:#fff;color:#000;border:1.5px solid #000;padding-left:8px;text-shadow:none}
 .pill.vpos i{display:inline-block;width:11px;height:11px;margin-right:6px;vertical-align:-1px;border-radius:2px}
+
+.ag h3{font-family:var(--serif);font-size:19px;font-weight:400;line-height:1.3;margin:4px 0 0}
+.ag.sol{border-left:4px solid var(--red);padding-left:14px}
+.ag.sol h3{font-size:23px;font-weight:700}

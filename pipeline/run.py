@@ -14,7 +14,7 @@ Sources (17e législature) : data.assemblee-nationale.fr
 
 Aucune dépendance hors bibliothèque standard.
 """
-import time, collections, glob, html, io, json, os, re, sqlite3, sys, unicodedata, urllib.request, zipfile
+import datetime, time, collections, glob, html, io, json, os, re, sqlite3, sys, unicodedata, urllib.request, zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(ROOT, "data", "raw")
@@ -22,6 +22,7 @@ OUT = os.path.join(ROOT, "data")
 LEG = "17"
 BASE = f"https://data.assemblee-nationale.fr/static/openData/repository/{LEG}"
 SOURCES = {
+    "agenda":      f"{BASE}/vp/reunions/Agenda.json.zip",
     "scrutins":    f"{BASE}/loi/scrutins/Scrutins.json.zip",
     "amendements": f"{BASE}/loi/amendements_div_legis/Amendements.json.zip",
     "dossiers":    f"{BASE}/loi/dossiers_legislatifs/Dossiers_Legislatifs.json.zip",
@@ -29,7 +30,7 @@ SOURCES = {
     # tous les acteurs, y compris les députés qui ont quitté l'Assemblée en cours de législature (optionnel)
     "amo30":       f"{BASE}/amo/tous_acteurs_tous_mandats_tous_organes_xi_legislature/AMO30_tous_acteurs_tous_mandats_tous_organes_xi_legislature.json.zip",
 }
-OPTIONAL = {"amo30"}
+OPTIONAL = {"amo30", "agenda"}
 ORDER = ["LFI", "GDR", "ECO", "SOC", "LIOT", "DEM", "EPR", "HOR", "DR", "UDR", "RN", "NI"]
 # codes organe → sigle court (les groupes changent d'uid quand ils se reconstituent)
 GROUPS = {"PO845401": "RN", "PO845407": "EPR", "PO845413": "LFI", "PO845419": "SOC", "PO845425": "DR",
@@ -278,6 +279,26 @@ def build():
                         "dept": a.get("dept"), "circo": a.get("circo"), "g": seg, "f": first[d], "l": l,
                         "slug": slugify(a.get("nom") or d)})
 
+    # ordre du jour : prochaines séances publiques et leurs points (votes solennels, motions, textes)
+    agenda = []
+    SEANCE = "PO838901"
+    for f in glob.iglob(os.path.join(RAW, "agenda", "**", "reunion", "*.json"), recursive=True):
+        try: r = json.load(open(f, encoding="utf-8"))["reunion"]
+        except Exception: continue
+        if r.get("organeReuniRef") != SEANCE: continue
+        ts = (r.get("timeStampDebut") or "")[:16]
+        if ts[:10] < str(datetime.date.today() - datetime.timedelta(days=1)): continue
+        pts = ((r.get("ODJ") or {}).get("pointsODJ") or {}).get("pointODJ") or []
+        pts = pts if isinstance(pts, list) else [pts]
+        for pt in pts:
+            typ = pt.get("typePointODJ") or ""; obj = pt.get("objet") or ""
+            etat = ((pt.get("cycleDeVie") or {}).get("etat")) or ""
+            if not obj or typ == "Questions au Gouvernement": continue
+            agenda.append({"date": ts[:10], "heure": ts[11:16], "type": typ, "objet": obj, "etat": etat,
+                           "decisif": typ == "Vote solennel" or bool(re.search(r"vote solennel|motion de censure|explications de vote", obj, re.I))})
+    agenda.sort(key=lambda x: (x["date"], x["heure"]))
+    log(f"agenda : {len(agenda)} points de séance publique à venir, dont {sum(1 for a in agenda if a['decisif'])} votes solennels")
+
     textes = sorted({s["textkey"] for s in scrutins.values()})
     TI = {t: i for i, t in enumerate(textes)}
     out_s = []
@@ -292,7 +313,7 @@ def build():
             o["a"] = {"au": a["auteur"].split(",")[0].strip()[:60], "gr": a["groupe"] or ("GOUV" if a["gouv"] else ""),
                       "ex": a["expose"], "di": a["dispositif"], "sur": bool(s.get("amdt_sur"))}
         out_s.append(o)
-    site = {"legislature": LEG, "textes": textes, "scrutins": out_s, "deputes": deputes,
+    site = {"legislature": LEG, "textes": textes, "scrutins": out_s, "deputes": deputes, "agenda": agenda,
             "groupes": [groups[g] for g in ORDER if g in groups], "themes": json.load(open(os.path.join(ROOT, "pipeline", "themes.json"), encoding="utf-8"))}
     json.dump(site, open(os.path.join(OUT, "site.json"), "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
     log(f"→ data/site.json : {len(out_s)} scrutins, {len(deputes)} députés, {os.path.getsize(os.path.join(OUT,'site.json'))//1024//1024} Mo")

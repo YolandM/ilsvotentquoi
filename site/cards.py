@@ -43,13 +43,14 @@ def headline(s):
 
 def positions(s):
     """Accroche mécanique : la position majoritaire de chaque groupe."""
-    by = {"pour": [], "contre": [], "abstention": [], "absent": []}
+    by = {"pour": [], "contre": [], "abstention": [], "absent": []}; frac = {}
     for g in s["g"]:
         if g[0] == "NI": continue
         pos = "absent" if g[1]+g[2]+g[3] == 0 else max((("pour", g[1]), ("contre", g[2]), ("abstention", g[3])), key=lambda x: x[1])[0]
-        by[pos].append(g[0])
+        by[pos].append(g[0]); frac[g[0]] = ({"pour": g[1], "contre": g[2], "abstention": g[3], "absent": g[5]-g[1]-g[2]-g[3]-g[4]}[pos], g[5])
     for k in by: by[k].sort(key=ORDER.index)
-    chips = lambda gs: "".join(f'<span class="chip"><i style="background:{COL[g]}"></i>{g}</span>' for g in gs)
+    # fraction brute "110/118" : position / membres du groupe. Pas de %, le dénominateur est visible.
+    chips = lambda gs: "".join(f'<span class="chip"><i style="background:{COL[g]}"></i>{g}<small>{frac[g][0]}/{frac[g][1]}</small></span>' for g in gs)
     out = []
     for k, l in [("pour", "Pour"), ("contre", "Contre"), ("abstention", "Abstention"), ("absent", "Absent")]:
         if by[k]: out.append(f'<div class="pos"><span class="pl">{l}</span>{chips(by[k])}</div>')
@@ -116,6 +117,7 @@ h1{font-family:"Newsreader",Georgia,serif;font-weight:700;letter-spacing:-.015em
 .pl{font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:17px;color:#000;width:150px}
 .chip{display:inline-flex;align-items:center;gap:6px;border:1.5px solid #000;border-radius:999px;padding:4px 12px 4px 8px;font-weight:700;font-size:19px}
 .chip i{width:12px;height:12px;border-radius:50%;display:inline-block}
+.chip small{font-weight:400;color:#828282;font-size:.82em;margin-left:5px;font-variant-numeric:tabular-nums}
 .brand{display:flex;justify-content:space-between;align-items:baseline;margin-top:26px;border-top:2px solid #000;padding-top:16px}
 .brand b{font-family:"Newsreader",Georgia,serif;font-size:32px;font-weight:700;letter-spacing:-.01em}
 .brand b em{font-style:normal;font-weight:300}
@@ -270,7 +272,7 @@ def deputy_card_html(i, d, fmt):
                     for k, l in [("pour", "pour"), ("contre", "contre"), ("abstention", "abstentions"), ("absent", "absent")])
     bar = '<div class="bar">' + "".join(f'<i style="width:{100*ess[k]/max(1,n):.1f}%;{tex[k]}"></i>' for k in ("pour","contre","abstention","absent")) + "</div>"
     where = (d["dept"] + (f", {d['circo']}ᵉ circonscription" if d["circo"] else "")) if d["dept"] else ""
-    lead = f"<b style=\"color:{col}\">{gid}</b>{' · ' + esc(where) if where else ''}. Présence : <b>{rate} %</b> tous scrutins (médiane des députés {med["presence"]} %), <b>{ess_rate} %</b> sur les votes décisifs (médiane {med["presence_essentiel"]} %). A voté autrement que la majorité de son groupe <b>{ecarts} fois</b> ({pe} % de ses votes)."
+    lead = f"<b style=\"color:{col}\">{gid}</b>{' · ' + esc(where) if where else ''}. Présence : <b>{rate} %</b> tous scrutins (médiane des députés {med['presence']} %), <b>{ess_rate} %</b> sur les votes décisifs (médiane {med['presence_essentiel']} %). A voté autrement que la majorité de son groupe <b>{ecarts} fois</b> ({pe} % de ses votes)."
     kicker = '<p class="kicker"><b>Assemblée nationale</b> · 17ᵉ législature · votes décisifs</p>'
     brand = '<div class="brand"><b>Ils votent <em>quoi</em> ?</b><span>ilsvotentquoi.fr · source : Assemblée nationale</span></div>'
     photo = os.path.join(ROOT, "data", "raw", "photos", d["id"] + ".jpg"); pic = ""

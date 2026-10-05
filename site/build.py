@@ -120,8 +120,10 @@ def group_table(s):
         bar = (f'<div class="sb" style="width:{W:.2f}%">{seg(g["pour"], f"background:{c}")}{seg(g["contre"], f"background-image:{xpat(c)}")}'
                f'{seg(g["abstention"], f"background:repeating-linear-gradient(45deg,{c} 0 2.5px,#fff 2.5px 5px)")}{seg(abs_, f"background:#fff;box-shadow:inset 0 0 0 1px {c}")}</div>')
         cell = lambda v: f'<div class="c {"" if v else "z"}">{f"<b>{v}</b>" if v else "0"}</div>'
-        rows.append(f'<div class="r"><div class="n"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:{c};margin-right:6px"></span><a href="/groupe/{g["id"].lower()}/" style="text-decoration:none">{g["id"]}</a><small>{esc(GN[g["id"]])} · {g["membres"]} membres</small></div><div class="b">{bar}</div>{cell(g["pour"])}{cell(g["contre"])}{cell(g["abstention"])}{cell(abs_)}</div>')
-    return f'<div class="gt"><div class="r h"><div class="n">Groupe</div><div class="b">Répartition des membres</div><div>Pour</div><div>Contre</div><div>Abst.</div><div>Abs.</div></div>{"".join(rows)}</div>'
+        pos = group_pos(g); share = {"pour": g["pour"], "contre": g["contre"], "abstention": g["abstention"], "absent": abs_}[pos]
+        pct = f'<div class="c pc"><b>{round(100*share/g["membres"])} %</b><small>{pos}</small></div>'
+        rows.append(f'<div class="r"><div class="n"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:{c};margin-right:6px"></span><a href="/groupe/{g["id"].lower()}/" style="text-decoration:none">{g["id"]}</a><small>{esc(GN[g["id"]])} · {g["membres"]} membres</small></div><div class="b">{bar}</div>{cell(g["pour"])}{cell(g["contre"])}{cell(g["abstention"])}{cell(abs_)}{pct}</div>')
+    return f'<div class="gt"><div class="r h"><div class="n">Groupe</div><div class="b">Répartition des membres</div><div>Pour</div><div>Contre</div><div>Abst.</div><div>Abs.</div><div title="position majoritaire, en % des membres du groupe">% membres</div></div>{"".join(rows)}</div><p class="hint" style="margin-top:6px">« % membres » : part des membres du groupe ayant pris la position majoritaire du groupe (absents compris dans le total).</p>'
 
 def mini_bar(s):
     """Une bande : chaque groupe à sa taille, coloré selon sa position majoritaire."""
@@ -187,6 +189,7 @@ def sidebar(current=None, counts=None):
     CUR = ' aria-current="page"'
     items = [f'<a class="subj" href="/"{CUR if current=="all" else ""}><span>Tous les votes</span><small>{len(S)}</small></a>',
              f'<a class="subj" href="/cette-semaine/"><span>Cette semaine</span><small>7 j</small></a>',
+             f'<a class="subj" href="/prochains-votes/"><span>Prochains votes</span><small>{sum(1 for a in (D.get("agenda") or []) if a["decisif"])}</small></a>',
              f'<a class="subj" href="/budget/"><span>Les budgets</span><small></small></a>',
              f'<a class="subj" href="/comparer/"><span>Comparer 2 groupes</span><small></small></a>',
              f'<a class="subj" href="/mon-depute/"><span>Mon député</span><small></small></a>',
@@ -304,7 +307,7 @@ def build_votes():
   {f'<p class="off">{esc(clean_title(s["ti"]))}</p>' if s['k'] in ("a", "m") else ""}
   <div class="result"><span class="pill {'ok' if ok else 'no'}">{'Adopté' if ok else 'Rejeté'}</span><span class="tally"><b>{s['t'][0]}</b> pour · <b>{s['t'][1]}</b> contre · <b>{s['t'][2]}</b> abst.</span><span>{s['v']} votants sur 577</span></div>
   <p class="summary-text">{sentence(s)}</p>
-  <div class="share"><button type="button" data-share>Partager</button>{f'<a href="/og/{s["n"]}-carre.png" download>Image carrée</a>' if has_card(s) else ""}{f'<a href="/og/{s["n"]}-story.png" download>Image story</a>' if s["k"] in ("e", "m") else ""}<a href="https://www.assemblee-nationale.fr/dyn/17/scrutins/{s['n']}" rel="noopener" target="_blank">Scrutin officiel ↗</a></div>
+  <div class="share"><button type="button" data-share>Partager</button>{f'<a href="/og/{s["n"]}-carre.png" download>Image carrée</a>' if has_card(s) else ""}{f'<a href="/og/{s["n"]}-story.png" download>Image story</a><a href="/reels/{s["n"]}.mp4" download>Vidéo reel</a>' if s["k"] in ("e", "m") else ""}<a href="https://www.assemblee-nationale.fr/dyn/17/scrutins/{s['n']}" rel="noopener" target="_blank">Scrutin officiel ↗</a></div>
   <div class="hlegend" style="margin-top:18px"><span>● Pour</span><span>⊗ Contre</span><span>▨ Abstention</span><span>○ Absent ou non-votant</span><span>· couleur = groupe</span><label class="toggle" style="margin-left:auto"><input type="checkbox" id="cvd"> Couleurs adaptées</label></div>
   <div class="hemi-wrap" data-vote="{s['vote']}" data-date="{s['d']}"><noscript>Activez JavaScript pour l'hémicycle interactif ; le détail par député est dans le tableau ci-dessous.</noscript></div>
   {group_table(s)}
@@ -609,6 +612,28 @@ def build_mon_depute():
 {"".join(sections)}</main></div>'''
     write("/mon-depute/", layout(f"Mon député : qui vote quoi dans ma circonscription ? · {NAME}", body, desc="Trouvez votre député par département et circonscription, et voyez ce qu'il ou elle a voté.", path="/mon-depute/", current="deputes"))
 
+def build_agenda():
+    """Prochains votes : l'ordre du jour des séances publiques, votes solennels en tête. Source : Agenda open data de l'Assemblée."""
+    ag = D.get("agenda") or []
+    sol = [a for a in ag if a["decisif"]]; autres = [a for a in ag if not a["decisif"]]
+    def card(a):
+        return (f'<article class="entry ag {"sol" if a["decisif"] else ""}"><div class="cat"><span><b>{esc(a["type"])}</b> · <time datetime="{a["date"]}">{fdate(a["date"])}</time>{" · "+a["heure"] if a["heure"] and a["heure"] != "00:00" else ""}</span><span>{esc(a["etat"])}</span></div>'
+                f'<h3>{esc(a["objet"])}</h3></article>')
+    bydate = collections.OrderedDict()
+    for a in autres: bydate.setdefault(a["date"], []).append(a)
+    days = "".join(f'<details class="fold"><summary><b>{fdate(d)}</b> <span class="muted">· {len(v)} point{"s" if len(v)>1 else ""} à l’ordre du jour</span></summary><div class="list">{"".join(card(a) for a in v)}</div></details>' for d, v in bydate.items())
+    NOSOL = "<p class=\"hint\">Aucun vote solennel annoncé pour l’instant.</p>"; NODAYS = "<p class=\"hint\">Rien d’inscrit.</p>"
+    lede = (f"<b>Prochains votes.</b> {len(sol)} vote{'s' if len(sol)>1 else ''} solennel{'s' if len(sol)>1 else ''} annoncé{'s' if len(sol)>1 else ''} à l'ordre du jour de l'Assemblée, et {len(autres)} autres points de séance publique."
+            if ag else "<b>Prochains votes.</b> Aucune séance publique n'est encore inscrite à l'ordre du jour.")
+    body = f'''<div class="grid">{sidebar(None, THEME_COUNTS)}<main class="main"><p class="lede">{lede}</p>
+<p class="hint">Un vote solennel est un scrutin public sur l'ensemble d'un texte, programmé à l'avance (en général le mardi après les questions au Gouvernement). L'ordre du jour est fixé par la Conférence des présidents et peut changer. Source : <a href="https://data.assemblee-nationale.fr/reunions/reunions" rel="noopener">agenda open data de l'Assemblée</a>, mis à jour chaque nuit. Le résultat de chaque vote apparaît ici le lendemain, avec sa carte et son reel.</p>
+<h2 class="sec">Votes solennels annoncés</h2>
+<div class="list">{"".join(card(a) for a in sol) or NOSOL}</div>
+<h2 class="sec">Le reste de l'ordre du jour</h2>
+{days or NODAYS}</main></div>'''
+    write("/prochains-votes/", layout(f"Prochains votes à l'Assemblée · {NAME}", body, desc="Les votes solennels annoncés à l'ordre du jour de l'Assemblée nationale, et le calendrier des séances publiques.", path="/prochains-votes/", current="votes"))
+    write("/api/agenda.json", json.dumps(ag, ensure_ascii=False, separators=(",", ":")))
+
 def build_meta(urls):
     write("/sitemap.xml", '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + "".join(f"<url><loc>{SITE}{u}</loc><lastmod>{BUILD_DATE}</lastmod></url>" for u in urls) + "</urlset>")
     write("/robots.txt", f"User-agent: *\nAllow: /\nSitemap: {SITE}/sitemap.xml\n")
@@ -623,11 +648,13 @@ def build_meta(urls):
 - Par groupe : {SITE}/groupe/<sigle>/, {SITE}/groupe/<sigle>/essentiels/ (votes décisifs) et {SITE}/groupe/<sigle>/<sujet>/ — sigles : {", ".join(g.lower() for g in ORDER)}
 - Par député : {SITE}/depute/<slug>-<id>/
 - Méthode : {SITE}/methode/
+- Prochains votes (ordre du jour, votes solennels annoncés) : {SITE}/prochains-votes/ et {SITE}/api/agenda.json
 - Cette semaine (7 derniers jours) : {SITE}/cette-semaine/ · Budgets : {SITE}/budget/<année>/ · Comparer deux groupes : {SITE}/comparer/?a=RN&b=LFI · Mon député : {SITE}/mon-depute/ · Statut : {SITE}/statut/ et {SITE}/api/statut.json
 - Recherche : {SITE}/recherche/?q=<mots> (index JSON : {SITE}/api/index.json)
 
 ## Données brutes
 - Députés : {SITE}/api/deputes.json
+- Reels vidéo (1080×1920, 11 s) pour chaque vote décisif : {SITE}/reels/<numéro>.mp4 (liste : {SITE}/api/reels.json)
 - Chaque page de vote contient un bloc JSON-LD (schema.org/Article) et une phrase de synthèse en texte brut
 - Source officielle d'un scrutin : https://www.assemblee-nationale.fr/dyn/17/scrutins/<numéro>
 """)
@@ -660,8 +687,8 @@ def main():
     fetch_photos()
     if os.path.isdir(PHOTOS): shutil.copytree(PHOTOS, os.path.join(DIST, "photos"))
     build_lists(); build_essentiels(); build_votes(); build_groups(); build_textes(); build_deputes(); build_methode(); build_recherche()
-    build_statut(); build_semaine(); build_comparer(); build_mon_depute(); budget_urls = build_budgets()
-    urls = ["/", "/essentiels/", "/recherche/", "/cette-semaine/", "/comparer/", "/mon-depute/", "/budget/", "/statut/"] + budget_urls + [ "/essentiels/motions-de-censure/", "/sujets/", "/groupes/", "/deputes/", "/methode/"] + [f"/sujet/{t}/" for t in THEME_LABEL] + [f"/groupe/{g.lower()}/" for g in ORDER] + [f"/groupe/{g.lower()}/essentiels/" for g in ORDER] + \
+    build_statut(); build_semaine(); build_agenda(); build_comparer(); build_mon_depute(); budget_urls = build_budgets()
+    urls = ["/", "/essentiels/", "/recherche/", "/cette-semaine/", "/prochains-votes/", "/comparer/", "/mon-depute/", "/budget/", "/statut/"] + budget_urls + [ "/essentiels/motions-de-censure/", "/sujets/", "/groupes/", "/deputes/", "/methode/"] + [f"/sujet/{t}/" for t in THEME_LABEL] + [f"/groupe/{g.lower()}/" for g in ORDER] + [f"/groupe/{g.lower()}/essentiels/" for g in ORDER] + \
            [f"/groupe/{g.lower()}/{t}/" for g in ORDER for t in THEME_LABEL] + [s["url"] for s in S] + [d["url"] for d in DEPS] + [f"/texte/{i}-{slug(t,50)}/" for i, t in enumerate(TX)]
     build_meta(urls)
     n = sum(len(f) for _, _, f in os.walk(DIST)); sz = sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(DIST) for f in fs)
