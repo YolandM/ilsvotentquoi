@@ -152,7 +152,7 @@ def load_acteurs():
             dep = next((x for x in deps_ if not s_(x.get("dateFin"))), None) or (sorted(deps_, key=lambda x: s_(x.get("dateDebut")) or "")[-1] if deps_ else None)
             lieu = ((dep or {}).get("election") or {}).get("lieu") or {}
             acts[s_(a["uid"])] = {"nom": f"{i['civ']} {i['prenom']} {i['nom']}", "prenom": i["prenom"], "famille": i["nom"],
-                                  "dept": s_(lieu.get("departement")), "circo": s_(lieu.get("numCirco")), "fin": s_((dep or {}).get("dateFin"))}
+                                  "dept": s_(lieu.get("departement")), "circo": s_(lieu.get("numCirco")), "fin": s_((dep or {}).get("dateFin")), "actif": src == "amo" and not s_((dep or {}).get("dateFin"))}
     for f in glob.iglob(os.path.join(RAW, "amo", "**", "organe", "*.json"), recursive=True):
         o = json.load(open(f, encoding="utf-8"))["organe"]
         if o.get("codeType") == "GP" and s_(o["uid"]) in GROUPS:
@@ -260,7 +260,7 @@ def build():
         for dep, (letter, gid) in s["nominal"].items():
             timeline[dep][s["date"]] = gid
             first[dep] = min(first.get(dep, s["date"]), s["date"]); last[dep] = max(last.get(dep, s["date"]), s["date"])
-    deps = sorted(timeline)
+    deps = sorted(timeline); last_date = max(s["date"] for s in scrutins.values())
     DI = {d: i for i, d in enumerate(deps)}
     deputes = []
     for d in deps:
@@ -268,8 +268,14 @@ def build():
         for date, g in sorted(timeline[d].items()):
             if g != lastg: seg.append([date, ORDER.index(g)]); lastg = g
         a = acts.get(d, {})
+        # fin de mandat : la date officielle si connue ; sinon, mandat en cours tant que l'acteur figure dans AMO10 (députés actifs)
+        # ou qu'il a voté lors du dernier scrutin connu. Sans ça, un député absent depuis l'été disparaîtrait de l'hémicycle à la rentrée.
+        fin = a.get("fin")
+        if fin: l = fin
+        elif a.get("actif"): l = last_date
+        else: l = last[d]
         deputes.append({"id": d, "nom": a.get("nom") or "Ancien·ne député·e", "prenom": a.get("prenom"), "famille": a.get("famille"),
-                        "dept": a.get("dept"), "circo": a.get("circo"), "g": seg, "f": first[d], "l": last[d],
+                        "dept": a.get("dept"), "circo": a.get("circo"), "g": seg, "f": first[d], "l": l,
                         "slug": slugify(a.get("nom") or d)})
 
     textes = sorted({s["textkey"] for s in scrutins.values()})
