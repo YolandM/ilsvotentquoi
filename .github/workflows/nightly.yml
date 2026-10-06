@@ -21,6 +21,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install playwright && playwright install --with-deps chromium
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
       - name: Télécharger l'open data de l'Assemblée
         run: python pipeline/run.py fetch
       - name: Construire les données
@@ -36,7 +37,7 @@ jobs:
           key: reels-${{ github.run_id }}
           restore-keys: reels-
       - name: Générer les reels (votes décisifs sans reel)
-        run: python site/reels.py
+        run: python site/reels.py || echo "::warning::reels non générés, le site est publié sans"
       - name: Publier sur Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
